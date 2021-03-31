@@ -1,0 +1,5 @@
+syntax = "proto3";
+
+message FloatOpt {
+  optional float float_option = 1;
+}

@@ -1,0 +1,9 @@
+syntax = "proto3";
+
+import "optiondef.proto";
+package test;
+option java_package = "test";
+option float_option = 1.0;
+
+
+

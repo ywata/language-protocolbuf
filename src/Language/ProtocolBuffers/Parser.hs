@@ -1,13 +1,13 @@
 {-# language FlexibleContexts, OverloadedStrings #-}
 -- | Parser for the proto3 spec,
 --   as defined in <https://developers.google.com/protocol-buffers/docs/reference/proto3-spec>.
-module Language.ProtocolBuffers.Parser (
+module Language.ProtocolBuffers.Parser {-(
   -- * Parse and sort out a whole file
   parseProtoBufFile
 , parseProtoBuf
   -- * Parse declarations
 , parseProtoBufDeclarations
-) where
+)-} where
 
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
@@ -15,164 +15,148 @@ import Text.Megaparsec
 import Text.Megaparsec.Char
 import qualified Text.Megaparsec.Char.Lexer as L
 
+import Language.ProtocolBuffers.ParserHelper
+import Language.ProtocolBuffers.PrimTypes
 import Language.ProtocolBuffers.Types
 
 -- | Parse a whole file into a 'ProtoBuf' structure.
 --   This function sorts together the different declarations.
-parseProtoBufFile :: FilePath -> IO (Either (ParseErrorBundle T.Text Char) ProtoBuf)
-parseProtoBufFile p = parseProtoBuf <$> T.readFile p
+parseProtocolBufferFile :: FilePath -> IO (Either (ParseErrorBundle T.Text Char) (ProtocolBuffer IntLit FloatLit StringLit))
+parseProtocolBufferFile p = parseProtocolBuffer <$> T.readFile p
 -- | Parse 'T.Text' into a 'ProtoBuf' structure.
 --   This function sorts together the different declarations.
-parseProtoBuf :: T.Text -> Either (ParseErrorBundle T.Text Char) ProtoBuf
-parseProtoBuf = parse wholeProtoBuf ""
+parseProtocolBuffer :: T.Text -> Either (ParseErrorBundle T.Text Char) (ProtocolBuffer IntLit FloatLit StringLit)
+parseProtocolBuffer = parse wholeProtocolBuffer ""
 -- | Parse all the declarations in a 'T.Text'.
-parseProtoBufDeclarations :: T.Text -> Either (ParseErrorBundle T.Text Char) [Declaration]
+parseProtoBufDeclarations :: T.Text -> Either (ParseErrorBundle T.Text Char) [Declaration IntLit FloatLit StringLit]
 parseProtoBufDeclarations = parse (many declaration) ""
 
-spaceConsumer :: MonadParsec Char T.Text m => m ()
-spaceConsumer = L.space space1 (L.skipLineComment "//") (L.skipBlockComment "/*" "*/")
 
-lexeme :: MonadParsec Char T.Text m => m a -> m a
-lexeme  = L.lexeme spaceConsumer
-symbol :: MonadParsec Char T.Text m => T.Text -> m T.Text
-symbol = L.symbol spaceConsumer
-reserved :: MonadParsec Char T.Text m => T.Text -> m T.Text
-reserved = lexeme . chunk
 
-number :: (MonadParsec Char T.Text m, Integral a) => m a 
-number =   L.signed spaceConsumer (lexeme L.decimal)
-       <|> lexeme L.octal
-       <|> lexeme L.hexadecimal
-floating :: (MonadParsec Char T.Text m, RealFloat a) => m a
-floating = L.signed spaceConsumer (lexeme L.float)
-stringLiteral :: MonadParsec Char T.Text m => m T.Text
-stringLiteral = T.pack <$> (char '"' >> manyTill L.charLiteral (char '"'))
-
-betweenBraces :: MonadParsec Char T.Text m => m a -> m a
-betweenBraces = between (symbol "{") (symbol "}")
-betweenSquares :: MonadParsec Char T.Text m => m a -> m a
-betweenSquares = between (symbol "[") (symbol "]")
-betweenParens :: MonadParsec Char T.Text m => m a -> m a
-betweenParens = between (symbol "(") (symbol ")")
-
-ident :: MonadParsec Char T.Text m => m T.Text
-ident = (\h t -> T.pack (h:t))
-        <$> letterChar
-        <*> many (alphaNumChar <|> char '_')
+------------
 identifier :: MonadParsec Char T.Text m => m T.Text
 identifier = lexeme ident
 fullIdentifier :: MonadParsec Char T.Text m => m FullIdentifier
 fullIdentifier = lexeme $ sepBy1 identifier (char '.')
 
-constant :: MonadParsec Char T.Text m => m Constant
+constant :: MonadParsec Char T.Text m => m (Constant IntLit FloatLit StringLit)
 constant 
-  =   KFloat  <$> floating
-  <|> KInt    <$> number
-  <|> KString . T.concat <$> ((:) <$> stringLiteral' <*> many stringLiteral')
-  <|> KBool True  <$ reserved "true"
-  <|> KBool False <$ reserved "false"
-  <|> KObject     <$> betweenBraces (many objectField)
+  =   KFloat      <$> try floatLit     -- temporary ignore +- sign
+  <|> KInt        <$> try intLit    -- temporary ignore +- sign
+  <|> KString     <$> strLit
+  <|> KBool True  <$  try (reserved "true")
+  <|> KBool False <$  try (reserved "false")
+  <|> KObject     <$> betweenBraces (many objectField)  
   <|> KIdentifier <$> fullIdentifier
-  where stringLiteral' = stringLiteral <* optional spaceConsumer
+  where
         objectField = (,) <$> identifier
                           <*> (   symbol ":" *> constant
                               <|> KObject <$> betweenBraces (many objectField) )
+optionName :: MonadParsec Char T.Text m => m OptionName
+--optionName = (++) <$> ((: []) <$> identifier <|> betweenParens fullIdentifier)
+--                  <*> many (char '.' >> identifier)
+optionName = Regular <$> fullIdentifier
+             <|>
+             Custom <$> betweenParens fullIdentifier <*> many (char '.' >> identifier)
 
-optionName :: MonadParsec Char T.Text m => m FullIdentifier
-optionName = (++) <$> ((: []) <$> identifier <|> betweenParens fullIdentifier)
-                  <*> many (char '.' >> identifier)
-
-topOption :: MonadParsec Char T.Text m => m Option
+topOption :: MonadParsec Char T.Text m => m (Option IntLit FloatLit StringLit)
 topOption
   = Option <$  reserved "option"
            <*> optionName
            <*  symbol "="
            <*> constant
            <*  symbol ";"
-innerOption :: MonadParsec Char T.Text m => m Option
+innerOption :: MonadParsec Char T.Text m => m (Option IntLit FloatLit StringLit)
 innerOption
   = Option <$> optionName
            <*  symbol "="
            <*> constant
 
-wholeProtoBuf :: MonadParsec Char T.Text m => m ProtoBuf
-wholeProtoBuf = declsToProtoBuf <$ spaceConsumer <*> many declaration
+emptyStatement :: MonadParsec Char T.Text m => m ()
+emptyStatement = lexeme (char ';') >> return ()
 
-declaration :: MonadParsec Char T.Text m => m Declaration
+wholeProtocolBuffer :: MonadParsec Char T.Text m => m (ProtocolBuffer IntLit FloatLit StringLit)
+wholeProtocolBuffer = ProtocolBuffer <$ spaceConsumer <*> many declaration
+
+declaration :: MonadParsec Char T.Text m => m (Declaration IntLit FloatLit StringLit)
 declaration = spaceConsumer *> declaration'
   where 
     declaration'
-      =   DSyntax  <$ reserved "syntax" <* symbol "=" <*> stringLiteral <* symbol ";"
+      =   DSyntax  <$ reserved "syntax" <* symbol "=" <*> (strVal <$> strLit) <* symbol ";"
       <|> DImport  <$ reserved "import"
                    <*> (Weak <$ reserved "weak" <|> Public <$ reserved "public" <|> pure Normal)
-                   <*> stringLiteral <* symbol ";"
+                   <*> (strVal <$> strLit) <* symbol ";"
       <|> DPackage <$ reserved "package" <*> fullIdentifier <* symbol ";"
       <|> DOption  <$> topOption
       <|> DType    <$> typeDeclaration
       <|> DService <$> serviceDeclaration
 
-typeDeclaration :: MonadParsec Char T.Text m => m TypeDeclaration
+typeDeclaration :: MonadParsec Char T.Text m => m (TypeDeclaration IntLit FloatLit StringLit)
 typeDeclaration
   =   buildEnum <$  reserved "enum"
-                <*> identifier
+                <*> lexeme identifier
                 <*> betweenBraces (many enumThing)
   <|> buildMessage <$  reserved "message"
                    <*> identifier
                    <*> betweenBraces (many msgThing)
+  <|> DEmptyTyDecl <$ emptyStatement
   where
-    buildEnum :: T.Text -> [EnumThing] -> TypeDeclaration
+    buildEnum :: T.Text -> [EnumThing i f s] -> TypeDeclaration i f s
     buildEnum name things
       = DEnum name [o | EnumThingOption o <- things]
                    [f | EnumThingField  f <- things]
-    buildMessage :: T.Text -> [MsgThing] -> TypeDeclaration
+    buildMessage :: T.Text -> [MsgThing i f s] -> TypeDeclaration i f s
     buildMessage name things
       = DMessage name [o | MsgThingOption   o <- things]
                       [r | MsgThingReserved r <- things]
                       [f | MsgThingField    f <- things]
                       [i | MsgThingInner    i <- things]
 
-data EnumThing
-  = EnumThingOption Option | EnumThingField EnumField
-enumThing :: MonadParsec Char T.Text m => m EnumThing
+data EnumThing i f s
+  = EnumThingOption (Option i f s) | EnumThingField (EnumField i f s)
+  deriving(Show, Eq)
+enumThing :: MonadParsec Char T.Text m => m (EnumThing IntLit FloatLit StringLit)
 enumThing
   =   EnumThingOption <$> topOption
   <|> EnumThingField  <$> enumField
   where
-    enumField :: MonadParsec Char T.Text m => m EnumField
+    enumField :: MonadParsec Char T.Text m => m (EnumField IntLit FloatLit StringLit)
     enumField = EnumField <$> identifier
                           <*  symbol "="
-                          <*> number
+                          <*> lexeme intLit
                           <*> (betweenSquares (sepBy innerOption (symbol ",")) <|> pure [])
+--                          <*> (pure [])
                           <*  symbol ";"
 
-data MsgThing
-  = MsgThingOption   Option
-  | MsgThingReserved Reserved
-  | MsgThingField    MessageField
-  | MsgThingInner    TypeDeclaration
-msgThing :: MonadParsec Char T.Text m => m MsgThing
+data MsgThing i f s
+  = MsgThingOption   (Option i f s)
+  | MsgThingReserved (Reserved i f s)
+  | MsgThingField    (MessageField i f s)
+  | MsgThingInner    (TypeDeclaration i f s)
+msgThing :: MonadParsec Char T.Text m => m (MsgThing IntLit FloatLit StringLit)
 msgThing
   =   MsgThingOption   <$> topOption
   <|> MsgThingReserved <$> reservedOption
   <|> MsgThingInner    <$> typeDeclaration
   <|> MsgThingField    <$> msgField
 
-reservedOption :: MonadParsec Char T.Text m => m Reserved
+reservedOption :: MonadParsec Char T.Text m => m (Reserved IntLit FloatLit StringLit)
 reservedOption
   = id <$  reserved "reserved"
-       <*> sepBy1 reservedValue (symbol ",")
+       <*> lexeme (sepBy1 reservedValue (symbol ","))
        <*  symbol ";"
   where
-    reservedValue :: MonadParsec Char T.Text m => m ReservedValue
-    reservedValue =   RRange <$> number <* reserved "to" <*> number
-                  <|> RInt   <$> number
-                  <|> RName  <$> stringLiteral
-
-msgField :: MonadParsec Char T.Text m => m MessageField
+    reservedValue = ranges <|> fieldNames
+    ranges = RRanges <$> lexeme (sepBy1 intLit (symbol ","))
+             <*> optional (reserved "to" >> ((I <$> intLit) <|> (Max <$ reserved "max")))
+    fieldNames = RNames <$> quoted (sepBy1 ident (symbol ","))
+    
+msgField :: MonadParsec Char T.Text m => m (MessageField IntLit FloatLit StringLit)
 msgField
   =   OneOfField  <$  reserved "oneof"
                   <*> identifier
-                  <*> betweenBraces (some msgField)
+                  <*> lexeme (betweenBraces (some msgField))
+                  <*> lexeme (betweenSquares (sepBy innerOption (symbol ","))  <|> pure []) -- Added.
   <|> MapField    <$  reserved "map"
                   <*  symbol "<"
                   <*> fieldType
@@ -181,31 +165,35 @@ msgField
                   <*  symbol ">"
                   <*> identifier
                   <*  symbol "="
-                  <*> number
-                  <*> (betweenSquares (sepBy innerOption (symbol ",")) <|> pure [])
+                  <*> intLit
+                  <*> lexeme (betweenSquares (sepBy innerOption (symbol ",")) <|> pure [])
                   <*  symbol ";"
-  <|> NormalField <$> (Repeated <$ reserved "repeated" <|> pure Single)
+  <|> NormalField <$> (Repeated <$ reserved "repeated"
+                       <|> Optional <$ reserved "optional" -- proto2
+                       <|> Required <$ reserved "required" -- proto2
+                       <|> pure Single)
                   <*> fieldType
                   <*> identifier
                   <*  symbol "="
-                  <*> number
-                  <*> (betweenSquares (sepBy innerOption (symbol ",")) <|> pure [])
+                  <*> lexeme intLit
+                  <*> lexeme (betweenSquares (sepBy innerOption (symbol ","))  <|> pure []) 
                   <*  symbol ";"
 
-serviceDeclaration :: MonadParsec Char T.Text m => m ServiceDeclaration
+
+serviceDeclaration :: MonadParsec Char T.Text m => m (ServiceDeclaration IntLit FloatLit StringLit)
 serviceDeclaration
   = buildService <$  reserved "service"
                  <*> identifier
                  <*> betweenBraces (many serviceThing)
   where
-    buildService :: T.Text -> [ServiceThing] -> ServiceDeclaration
+    buildService :: T.Text -> [ServiceThing i f s] -> ServiceDeclaration i f s
     buildService name things
       = Service name [o | ServiceThingOption o <- things]
                      [m | ServiceThingMethod m <- things]
 
-data ServiceThing
-  = ServiceThingOption Option | ServiceThingMethod Method
-serviceThing :: MonadParsec Char T.Text m => m ServiceThing
+data ServiceThing i f s
+  = ServiceThingOption (Option i f s) | ServiceThingMethod (Method i f s)
+serviceThing :: MonadParsec Char T.Text m => m (ServiceThing IntLit FloatLit StringLit)
 serviceThing
   =   ServiceThingOption <$> topOption
   <|> ServiceThingMethod <$> method
@@ -240,3 +228,5 @@ fieldType
   <|> TString <$ reserved "string"
   <|> TBytes <$ reserved "bytes"
   <|> TOther <$> fullIdentifier
+
+------------

@@ -1,0 +1,7 @@
+syntax = "proto3";
+option java_package = "com.example.foo";
+
+message A {
+	optional float float_option = 1;
+}
+

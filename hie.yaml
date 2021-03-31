@@ -1,0 +1,14 @@
+cradle:
+  multi:
+    - path: "./Setup.hs"
+      config:
+        cradle:
+          none:
+    - path: "./"
+      config:
+        cradle:
+          cabal:
+            - path: "./src"
+              component: "lib:language-protocolbuf"
+            - path: "./test"
+              component: "test:spec"
