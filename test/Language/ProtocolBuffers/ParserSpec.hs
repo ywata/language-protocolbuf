@@ -81,22 +81,3 @@ value.float_opt = "";
 |]
       P.parse innerOption "" input `shouldBe` Right (Option (Regular ["value", "float_opt"]) (KString (StringLit [])))
 
-  describe "enumField" $ do
-    it "option" $ do
-      let input :: T.Text    
-          input = [text|
-option test = "s";
-|]
-      P.parse enumThing "" input `shouldBe` Right (EnumThingOption (Option (Regular ["test"]) (KString (StringLit [CHAR 's']))))
-    it "enumFiled without option" $ do
-      let input :: T.Text    
-          input = [text|
-E1 = 2;
-|]
-      P.parse enumThing "" input `shouldBe` Right (EnumThingField (EnumField "E1" (Dec "2") []))
-    it "enumFiled with option" $ do
-      let input :: T.Text    
-          input = [text|
-E1 = 2[test = 1];
-|]
-      P.parse enumThing "" input `shouldBe` Right (EnumThingField (EnumField "E1" (Dec "2") [Option (Regular ["test"]) (KInt (Dec "1"))]))

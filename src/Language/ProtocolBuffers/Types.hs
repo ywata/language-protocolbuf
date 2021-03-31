@@ -7,7 +7,7 @@
 --   - It generalizes types over integer, floating and strings so that precise definitions
 --     can be captured.
 module Language.ProtocolBuffers.Types where
-
+import Prelude hiding (Enum)
 {-
 Some options are file-level options, meaning they should be written at the top-level scope,
 not inside any message, enum, or service definition. (Defined in ProtoBuf)
@@ -32,74 +32,36 @@ import Language.ProtocolBuffers.PrimTypes
 type Identifier = T.Text
 type FullIdentifier = [Identifier]
 
-
--- | Whole definition, in which declarations are
---   sorted out by their form.
-data ProtoBuf i f s
-  = ProtoBuf { syntax   :: Maybe T.Text
-             , package  :: Maybe FullIdentifier
-             , imports  :: [(ImportType, T.Text)]
-             , options  :: [Option i f s]
-             , types    :: [TypeDeclaration i f s]
-             , services :: [ServiceDeclaration i f s]
-             }
-  deriving (Eq, Show)
-
 data ProtocolBuffer i f s = ProtocolBuffer [Declaration i f s]
   deriving (Eq, Show)
 
-declsToProtoBuf :: [Declaration i f s] -> ProtoBuf i f s
-declsToProtoBuf things
-  = ProtoBuf (safeHead [s | DSyntax s <- things])
-             (safeHead [s | DPackage s <- things])
-             [(i,t) | DImport i t <- things]
-             [o | DOption o <- things]
-             [t | DType t <- things]
-             [s | DService s <- things]
+type Version = T.Text
 
-safeHead :: [a] -> Maybe a
-safeHead []    = Nothing
-safeHead (x:_) = Just x
 
 -- | Declarations, that is, anything which may
---   appear in the top-level.
+-- |  appear in the top-level.
 data Declaration i f s where
-  DSyntax  :: T.Text                    -> Declaration i f s
-  DImport  :: ImportType -> T.Text      -> Declaration i f s
-  DPackage :: FullIdentifier            -> Declaration i f s
-  DOption  :: Option i f s              -> Declaration i f s
-  DType    :: TypeDeclaration i f s     -> Declaration i f s
-  DService :: ServiceDeclaration i f s  -> Declaration i f s
-  deriving (Eq, Show)
-
-
-data OptionName where
-  Regular :: FullIdentifier -> OptionName
-  Custom :: FullIdentifier -> FullIdentifier -> OptionName
+  DSyntax  :: Version                      -> Declaration i f s
+  DImport  :: ImportType -> FullIdentifier -> Declaration i f s
+  DPackage :: FullIdentifier               -> Declaration i f s
+  DOption  :: Option i f s                 -> Declaration i f s
+  {- TopLevelDef -}
+  DMessage :: Message i f s -> Declaration i f s -- Defined like this as it is defined both in message or toplevel
+  DEnum    :: Enum i f s    -> Declaration i f s -- Defined like this as it is defined both in message or toplevel
+  DService :: ServiceName -> [ServiceField i f s] -> Declaration i f s
+  
+  DEmpty   :: Declaration i f s
   deriving (Eq, Show)
 
 data Option i f s where
   Option :: OptionName -> Constant i f s -> Option i f s
   deriving (Eq, Show)
-
-data TypeDeclaration  i f s where
-  DEnum    :: Identifier -> [Option i f s] -> [EnumField i f s]
-           -> TypeDeclaration i f s
-  DMessage :: Identifier -> [Option i f s] -> [Reserved i f s]
-           -> [MessageField i f s] -> [TypeDeclaration i f s]
-           -> TypeDeclaration i f s
-  DEmptyTyDecl   :: TypeDeclaration i f s
-  deriving (Eq, Show)
-
-data ServiceDeclaration i f s where
-  Service :: Identifier -> [Option i f s] -> [Method i f s] -> ServiceDeclaration i f s
-  deriving (Eq, Show)
-
-data Method i f s where
-  Method :: Identifier
-         -> Label -> FieldType
-         -> Label -> FieldType
-         -> [Option i f s] -> Method i f s
+-- | OptionName:
+-- |  Regular : Option defined by google.
+-- |  Custom  : Custom option.
+data OptionName where
+  Regular :: FullIdentifier -> OptionName
+  Custom  :: FullIdentifier -> FullIdentifier -> OptionName
   deriving (Eq, Show)
 
 data ImportType
@@ -115,10 +77,6 @@ data Constant i f s where
   KObject     :: [(T.Text, Constant i f s)] -> Constant i f s
   deriving (Eq, Show)
 
-data EnumField i f s where
-  EnumField :: FieldName -> i  -> [Option i f s] -> EnumField i f s
-  deriving (Eq, Show)
-
 type TypeName = FullIdentifier
 data FieldType
   = TInt32 | TInt64 | TUInt32 | TUInt64 | TSInt32 | TSInt64
@@ -129,18 +87,54 @@ data FieldType
 type FieldName = Identifier
 type FieldNumber = Int
 
-data MessageField i f s where
-  NormalField :: Label -> FieldType
-              -> FieldName -> i
-              -> [Option i f s] -> MessageField i f s
-  OneOfField  :: FieldName -> [MessageField i f s]
-              -> [Option i f s] -> MessageField i f s -- Added Options but not used.
-  MapField    :: FieldType -> FieldType
-              -> FieldName -> i
-              -> [Option i f s] -> MessageField i f s
-  EmptyMessageField :: MessageField i f s
+
+{-
+enum = "enum" enumName enumBody
+enumBody = "{" { option | enumField | emptyStatement } "}"
+enumField = ident "=" [ "-" ] intLit [ "[" enumValueOption { ","  enumValueOption } "]" ]";"
+enumValueOption = optionName "=" constant
+-}
+type EnumName = Identifier
+
+data Enum i f s where
+  Enum :: EnumName -> [EnumField i f s] -> Enum i f s
   deriving (Eq, Show)
 
+data EnumField i f s where
+  EnumField :: FieldName -> i -> [Option i f s] -> EnumField i f s
+  EOption   :: Option i f s                     -> EnumField i f s
+  EEmpty    ::                                     EnumField i f s
+  deriving (Eq, Show)
+{-
+message = "message" messageName messageBody
+messageBody = "{" { field | enum | message | option | oneof | mapField |
+reserved | emptyStatement } "}"
+-}
+
+type OneOfName = Identifier
+data OneOf i f s where
+  OneOf :: OneOfName -> [OneOfField i f s] -> OneOf i f s
+  deriving (Eq, Show)
+data OneOfField i f s where
+  OneOfField :: FieldType -> OneOfName -> i -> [Option i f s] -> OneOfField i f s
+  deriving (Eq, Show)
+type MessageName = Identifier
+data Message i f s where
+  Message :: MessageName -> [MessageField i f s] -> Message i f s
+  deriving (Eq, Show)
+type MapName = Identifier
+
+data MessageField i f s where
+  MField      :: Label -> FieldType -> FieldName -> i -> [Option i f s] -> MessageField i f s
+  MEnum      :: Enum i f s                                             -> MessageField i f s
+  MMessage   :: Message i f s                                          -> MessageField i f s
+  MOption    :: Option i f s                                           -> MessageField i f s
+  MOneOfDef   :: OneOf i f s                                            -> MessageField i f s
+  MapDef     :: FieldType {-sans float-} -> FullIdentifier
+             -> MapName -> i -> [Option i f s]                         -> MessageField i f s
+  MReserved   :: ReservedValue i f s                                    -> MessageField i f s
+  MEmpty ::                                                               MessageField i f s
+  deriving (Eq, Show) 
 data Label
   = Single
   | Repeated
@@ -148,13 +142,42 @@ data Label
   | Required -- proto2
   deriving (Eq, Show)
 
-pattern Stream = Repeated
+--pattern Stream = Repeated
 
-type Reserved i f s = [ReservedValue i f s]
 data MaxOrInt i = Max | I i
   deriving (Eq, Show)
 
 data ReservedValue i f s where
   RRanges :: [i] -> Maybe (MaxOrInt i) ->  ReservedValue i f s
   RNames  :: [Identifier] -> ReservedValue i f s
+  deriving (Eq, Show)
+
+
+{-
+service = "service" serviceName "{" { option | rpc | stream | emptyStatement } "}"
+rpc = "rpc" rpcName "(" [ "stream" ] messageType ")" "returns" "(" [ "stream" ]
+messageType ")" (( "{" { option | emptyStatement } "}" ) | ";" )
+stream = "stream" streamName "(" messageType "," messageType ")" (( "{"
+{ option | emptyStatement } "}") | ";" )
+-}
+data Stream i f s where
+  Stream :: Identifier -> [FullIdentifier] -> [Option i f s] -> Stream i f s
+type ServiceName = Identifier
+data ServiceField i f s where
+  SOption :: Option i f s -> ServiceField i f s
+  SRPC :: Identifier -> Bool  -> FullIdentifier -> Bool -> FullIdentifier
+    -> [Option i f s] -> ServiceField i f s
+  SEmpty :: ServiceField i f s
+  deriving (Eq, Show)
+
+data Service i f s where
+  Service :: ServiceName -> [ServiceField i f s] -> Service i f s 
+  deriving (Eq, Show)
+
+data  Method i f s where
+  Method :: Identifier
+         -> Label -> FieldType
+         -> Label -> FieldType
+         -> [Option i f s] -> Method i f s
+  
   deriving (Eq, Show)

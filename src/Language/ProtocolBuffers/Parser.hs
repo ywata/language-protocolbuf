@@ -9,6 +9,8 @@ module Language.ProtocolBuffers.Parser {-(
 , parseProtoBufDeclarations
 )-} where
 
+import Prelude hiding (Enum)
+
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import Text.Megaparsec
@@ -30,7 +32,6 @@ parseProtocolBuffer = parse wholeProtocolBuffer ""
 -- | Parse all the declarations in a 'T.Text'.
 parseProtoBufDeclarations :: T.Text -> Either (ParseErrorBundle T.Text Char) [Declaration IntLit FloatLit StringLit]
 parseProtoBufDeclarations = parse (many declaration) ""
-
 
 
 ------------
@@ -85,132 +86,26 @@ declaration = spaceConsumer *> declaration'
       =   DSyntax  <$ reserved "syntax" <* symbol "=" <*> (strVal <$> strLit) <* symbol ";"
       <|> DImport  <$ reserved "import"
                    <*> (Weak <$ reserved "weak" <|> Public <$ reserved "public" <|> pure Normal)
-                   <*> (strVal <$> strLit) <* symbol ";"
+                   <*> (T.splitOn "." . strVal <$> strLit) <* symbol ";"
       <|> DPackage <$ reserved "package" <*> fullIdentifier <* symbol ";"
       <|> DOption  <$> topOption
-      <|> DType    <$> typeDeclaration
-      <|> DService <$> serviceDeclaration
+      <|> DMessage <$> messageParser
+      <|> DEnum    <$> enumParser
+      <|> DService <$> identifier <*> many serviceField
+      <|> DEmpty   <$ symbol ";"
 
-typeDeclaration :: MonadParsec Char T.Text m => m (TypeDeclaration IntLit FloatLit StringLit)
-typeDeclaration
-  =   buildEnum <$  reserved "enum"
-                <*> lexeme identifier
-                <*> betweenBraces (many enumThing)
-  <|> buildMessage <$  reserved "message"
-                   <*> identifier
-                   <*> betweenBraces (many msgThing)
-  <|> DEmptyTyDecl <$ emptyStatement
-  where
-    buildEnum :: T.Text -> [EnumThing i f s] -> TypeDeclaration i f s
-    buildEnum name things
-      = DEnum name [o | EnumThingOption o <- things]
-                   [f | EnumThingField  f <- things]
-    buildMessage :: T.Text -> [MsgThing i f s] -> TypeDeclaration i f s
-    buildMessage name things
-      = DMessage name [o | MsgThingOption   o <- things]
-                      [r | MsgThingReserved r <- things]
-                      [f | MsgThingField    f <- things]
-                      [i | MsgThingInner    i <- things]
-
-data EnumThing i f s
-  = EnumThingOption (Option i f s) | EnumThingField (EnumField i f s)
-  deriving(Show, Eq)
-enumThing :: MonadParsec Char T.Text m => m (EnumThing IntLit FloatLit StringLit)
-enumThing
-  =   EnumThingOption <$> topOption
-  <|> EnumThingField  <$> enumField
-  where
-    enumField :: MonadParsec Char T.Text m => m (EnumField IntLit FloatLit StringLit)
-    enumField = EnumField <$> identifier
-                          <*  symbol "="
-                          <*> lexeme intLit
-                          <*> (betweenSquares (sepBy innerOption (symbol ",")) <|> pure [])
---                          <*> (pure [])
-                          <*  symbol ";"
-
-data MsgThing i f s
-  = MsgThingOption   (Option i f s)
-  | MsgThingReserved (Reserved i f s)
-  | MsgThingField    (MessageField i f s)
-  | MsgThingInner    (TypeDeclaration i f s)
-msgThing :: MonadParsec Char T.Text m => m (MsgThing IntLit FloatLit StringLit)
-msgThing
-  =   MsgThingOption   <$> topOption
-  <|> MsgThingReserved <$> reservedOption
-  <|> MsgThingInner    <$> typeDeclaration
-  <|> MsgThingField    <$> msgField
-
-reservedOption :: MonadParsec Char T.Text m => m (Reserved IntLit FloatLit StringLit)
-reservedOption
-  = id <$  reserved "reserved"
-       <*> lexeme (sepBy1 reservedValue (symbol ","))
-       <*  symbol ";"
-  where
-    reservedValue = ranges <|> fieldNames
-    ranges = RRanges <$> lexeme (sepBy1 intLit (symbol ","))
-             <*> optional (reserved "to" >> ((I <$> intLit) <|> (Max <$ reserved "max")))
-    fieldNames = RNames <$> quoted (sepBy1 ident (symbol ","))
-    
-msgField :: MonadParsec Char T.Text m => m (MessageField IntLit FloatLit StringLit)
-msgField
-  =   OneOfField  <$  reserved "oneof"
-                  <*> identifier
-                  <*> lexeme (betweenBraces (some msgField))
-                  <*> lexeme (betweenSquares (sepBy innerOption (symbol ","))  <|> pure []) -- Added.
-  <|> MapField    <$  reserved "map"
-                  <*  symbol "<"
-                  <*> fieldType
-                  <*  symbol ","
-                  <*> fieldType
-                  <*  symbol ">"
-                  <*> identifier
-                  <*  symbol "="
-                  <*> intLit
-                  <*> lexeme (betweenSquares (sepBy innerOption (symbol ",")) <|> pure [])
-                  <*  symbol ";"
-  <|> NormalField <$> (Repeated <$ reserved "repeated"
-                       <|> Optional <$ reserved "optional" -- proto2
-                       <|> Required <$ reserved "required" -- proto2
-                       <|> pure Single)
-                  <*> fieldType
-                  <*> identifier
-                  <*  symbol "="
-                  <*> lexeme intLit
-                  <*> lexeme (betweenSquares (sepBy innerOption (symbol ","))  <|> pure []) 
-                  <*  symbol ";"
+messageParser :: MonadParsec Char T.Text m => m (Message IntLit FloatLit StringLit)
+messageParser = Message <$> identifier <*> many messageField
+enumParser :: MonadParsec Char T.Text m => m (Enum IntLit FloatLit StringLit)
+enumParser = Enum <$> identifier <*> many enumField
 
 
-serviceDeclaration :: MonadParsec Char T.Text m => m (ServiceDeclaration IntLit FloatLit StringLit)
-serviceDeclaration
-  = buildService <$  reserved "service"
-                 <*> identifier
-                 <*> betweenBraces (many serviceThing)
-  where
-    buildService :: T.Text -> [ServiceThing i f s] -> ServiceDeclaration i f s
-    buildService name things
-      = Service name [o | ServiceThingOption o <- things]
-                     [m | ServiceThingMethod m <- things]
-
-data ServiceThing i f s
-  = ServiceThingOption (Option i f s) | ServiceThingMethod (Method i f s)
-serviceThing :: MonadParsec Char T.Text m => m (ServiceThing IntLit FloatLit StringLit)
-serviceThing
-  =   ServiceThingOption <$> topOption
-  <|> ServiceThingMethod <$> method
-  where
-    method = Method <$  reserved "rpc"
-                    <*> identifier
-                    <*  symbol "("
-                    <*> (Stream <$ reserved "stream" <|> pure Single)
-                    <*> fieldType
-                    <*  symbol ")"
-                    <*  reserved "returns"
-                    <*  symbol "("
-                    <*> (Stream <$ reserved "stream" <|> pure Single)
-                    <*> fieldType
-                    <*  symbol ")"
-                    <*> (betweenBraces (many topOption) <|> [] <$ symbol ";")
-
+messageField :: MonadParsec Char T.Text m => m (MessageField IntLit FloatLit StringLit)
+messageField = undefined
+enumField :: MonadParsec Char T.Text m => m (EnumField IntLit FloatLit StringLit)
+enumField = undefined
+serviceField :: MonadParsec Char T.Text m => m (ServiceField IntLit FloatLit StringLit)
+serviceField = undefined
 fieldType :: MonadParsec Char T.Text m => m FieldType
 fieldType
   =   TInt32 <$ reserved "int32"
