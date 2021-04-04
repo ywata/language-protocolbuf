@@ -12,24 +12,18 @@ module Language.ProtocolBuffers(
   -- defined in Types.hs
   , Identifier
   , FullIdentifier
-  , ProtoBuf(..)
   , Declaration(..)
   , Option(..)
-  , TypeDeclaration(..)
-  , ServiceDeclaration(..)
   , Method(..)
   , ImportType(..)
   , Constant(..)
   , EnumField(..)
-  , TypeName
   , FieldType(..)
   , FieldName
   , FieldNumber
   , MessageField(..)
   , Label(..)
-  , Reserved(..)
   , MaxOrInt(..)
-  , ReservedValue(..)
   )
 
 where

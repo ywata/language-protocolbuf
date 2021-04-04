@@ -29,7 +29,7 @@ spec :: Spec
 spec = do
   describe "PrettyPrint" $ do
     it "EmptyDecl" $ do
-      let input :: T.Text    
+      let input :: T.Text
           input = [text|
 syntax = 'proto3';
 package test;
@@ -37,20 +37,32 @@ import public "test.a";
 import weak "test.b";
 import "test.c";
 option java_package = "com.example";
-message A{
+option allow_signal = true;  
+message A {
+  int32 month = -1;
+  message AA {
+    int32 days = 2;
+  }
+  enum BB {
+    BB1 = 1;
+  }
   int32 days = 1;
-  option allow_signal = true;
+  required int32 days = 1;  
+  int32 days = 1 [test = 1];
+  int32 days = 1 [test = 1, test = 2];
+  option allow_signal = true;  
   enum B {
-    B1 = 1;
     B2 = 2 [custom_option = "hello!"];
+    B1 = 1;
   };
-  opeof C {
+  oneof C {
     string a = 1;
   };
+  optional bool client_streaming = 5;
+  bool client_streaming = 5 [default = true];
+  optional bool client_streaming = 5 [default = false];
 }
 |]
           p = prettyParse input
-      liftIO . print $ p
-      liftIO . putStrLn . T.unpack $ rightShow p
       p `shouldBe` (Right "")
 

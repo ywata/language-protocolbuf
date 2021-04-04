@@ -23,18 +23,24 @@ punct ch = sep . punctuate (char ch) . map text'
 instance Pretty a => Pretty [a] where
   pretty = vcat . map pretty
 
+instance Pretty Sign where
+  pretty P = text' "+"
+  pretty N = text' "-"
+  pretty _ = text' ""
+
 instance Pretty IntLit where
-  pretty (Dec t) = text' t
-  pretty (Hex t) = text "0x" <> text' t
-  pretty (Oct t) = text "0" <> text' t
+  pretty (Dec s t) = pretty s <> text' t
+  pretty (Hex s t) = pretty s <> text "0x" <> text' t
+  pretty (Oct s t) = pretty s <> text "0" <> text' t
+
 
 instance Pretty FloatLit where
-  pretty (Fl1 t (Just d) e) = text' t <> text' "." <> text' d <> text' (maybe "" id e)
-  pretty (Fl1 t Nothing e) = text' t <> text' (maybe "" id e)
-  pretty (Fl2 d e) = text' d <> text' e
-  pretty (Fl3 d e) = text' "." <> text' d <> text' (maybe "" id e)
-  pretty Inf = text' "inf"
-  pretty NaN = text' "nan"
+  pretty (Fl1 s t (Just d) e) = pretty s <> text' t <> text' "." <> text' d <> text' (maybe "" id e)
+  pretty (Fl1 s t Nothing e) = pretty s <> text' t <> text' (maybe "" id e)
+  pretty (Fl2 s d e) = pretty s <> text' d <> text' e
+  pretty (Fl3 s d e) = pretty s <> text' "." <> text' d <> text' (maybe "" id e)
+  pretty (Inf s) = pretty s <> text' "inf"
+  pretty (NaN s) = pretty s <> text' "nan"
   
 instance Pretty StringLit where
   pretty = text' . strVal
@@ -80,6 +86,7 @@ instance (Pretty i, Pretty f, Pretty s) => Pretty (ServiceField i f s) where
 --  RPC :: Identifier -> Bool  -> FullIdentifier -> Bool -> FullIdentifier
 --    -> [Option i f s] -> ServiceField i f s
   pretty SEmpty = semi
+  pretty _ = semi
 
 instance (Pretty i, Pretty f, Pretty s) => Pretty (Service i f s) where
   pretty (Service id fs) = text' id <> pretty fs <> semi
@@ -106,26 +113,43 @@ instance Pretty FieldType where
   pretty TSFixed64 = text' "sfixed64"
   pretty TDouble = text' "double"
   pretty TBool = text' "bool"
+  pretty TString = text' "string"
   pretty TBytes = text' "bytes"
-  pretty (TOther fids) = punct '.' fids
+  pretty (TOther fids) = pretty fids
+
+instance Pretty RefType where
+  pretty (RefType fids) = text "RefType not implemented"
+  pretty (Dot     fids) = text "RefType not impemented"
 
 
 instance (Pretty i, Pretty f, Pretty s) => Pretty (Message i f s) where
   pretty (Message id mfs) = text' "message" <+> text' id <> braces (sep $ map pretty mfs)
-    
+
+prOptions :: (Pretty i, Pretty f, Pretty s) => [Option i f s] -> Doc
+prOptions opts = braces (sep . punctuate comma $ map pretty opts)
 
 instance (Pretty i, Pretty f, Pretty s) => Pretty (OneOf i f s) where
-  pretty (OneOf id ofs) = text' "oneof" <+> text' id <> braces (sep $ map pretty ofs)
+  pretty (OneOf id ofs) = text' "oneof" <+> text' id <> (sep $ map pretty ofs)
 
 instance (Pretty i, Pretty f, Pretty s) => Pretty (OneOfField i f s) where
-  pretty (OneOfField t id i ops) = pretty t <+> text' id  <+> equals <+> pretty i <+> brackets (sep $ map pretty ops)
+  pretty (OneOfField t id i ops) = pretty t <+> text' id  <+> equals <+> pretty i
+    <+> prOptions ops
+  pretty (OOption o) = text' "option" <+> pretty o
+  pretty OEmpty = semi
   
 instance (Pretty i, Pretty f, Pretty s) => Pretty (MessageField i f s) where
   pretty (MField l ft fn i opts) = pretty l <+> pretty ft <+> text' fn <+> equals <+> pretty i
-    <+> (brackets . sep . punctuate (char ',') $ map pretty opts) <> semi
-  pretty (MOneOfDef d) = pretty d
+    <+> prOptions opts <> semi
+  pretty (MEnum e) = pretty e
+  pretty (MMessage m) = pretty m
+  pretty (MOption o) = text' "option" <+> pretty o
+  pretty (MOneOf d) = text' "oneof" <+> pretty d
 
-  pretty (MapDef ft1 ft2 fn i opts) = text' "MapField" <> semi
+  pretty (MMapField ft1 ft2 fn i opts) =
+    text' "map" <+> char '<' <> pretty ft1 <> comma <> punct '.' ft2 <> char '>'
+      <+> text' fn <+> equals <+> pretty i <+> prOptions opts
+  pretty (MReserved r) = text' "reserved" <+> pretty r
+  pretty (MExtensions e) = text' "extensiosn" <+> pretty e
   pretty MEmpty = semi
     
 instance Pretty Label where
@@ -134,6 +158,14 @@ instance Pretty Label where
   pretty Optional = text' "optional"
   pretty Required = text' "required"
 
-instance Pretty (ReservedValue i f s) where
-  pretty (RRanges is m) = text' "RRanges"
-  pretty (RNames is) = text' "RNames"
+instance Pretty i => Pretty (Reserved i) where
+  pretty (Ranges rs) = pretty rs
+  pretty (FieldNames fns) = sep . map (text' . T.concat) $ fns
+
+instance Pretty i => Pretty (Extension i) where
+  pretty (Extension rs) = pretty rs
+
+instance Pretty i => Pretty (Range i) where
+  pretty (Solo i) = pretty i
+  pretty (FromTo f t) = pretty f <+> text' "to" <+> pretty t
+  pretty (ToMax f) = pretty f <+> text' "to" <+> text' "max"

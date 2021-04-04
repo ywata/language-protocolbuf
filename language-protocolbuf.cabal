@@ -18,16 +18,18 @@ build-type:          Simple
 
 library
   exposed-modules:     Language.ProtocolBuffers.Types
-                       , Language.ProtocolBuffers.PrimTypes
-                       , Language.ProtocolBuffers.Parser
-                       , Language.ProtocolBuffers.ParserHelper
-                       , Language.ProtocolBuffers.PrettyPrint
+                     , Language.ProtocolBuffers.PrimTypes
+                     , Language.ProtocolBuffers.Parser
+                     , Language.ProtocolBuffers.ParserHelper
+                     , Language.ProtocolBuffers.PrettyPrint
+                     , Language.ProtocolBuffers
 
   -- other-extensions:
   build-depends:       base >=4.12 && <5
                      , hspec >= 2.7.0
                      , megaparsec >= 8.0.0
                      , neat-interpolation >= 0.5.1.2
+                     , optparse-declarative >= 0.4.0
                      , pretty >= 1.1.3.0
                      , text >= 1.2.0.0
 
@@ -40,7 +42,7 @@ executable parse-proto
       app
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
-                    language-protocolbuf
+                  language-protocolbuf
                 , base >=4.7 && <5
                 , megaparsec >= 8.0.0
                 , neat-interpolation >= 0.5.1.2
@@ -57,13 +59,14 @@ test-suite spec
       test
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
-                  base >=4.7 && <5
+                    base >=4.7 && <5
                 , hspec >= 2.7.0
                 , hspec-megaparsec >= 2.0.0
                 , language-protocolbuf
                 , megaparsec >= 8.0.0
                 , neat-interpolation >= 0.5.0.0
                 , neat-interpolation >= 0.5.1.2
+                , optparse-declarative >= 0.4.0
                 , pretty >= 1.1.3.0
                 , text >= 1.2.0.0
   build-tool-depends: hspec-discover:hspec-discover == 2.*

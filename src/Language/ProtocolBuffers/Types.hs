@@ -77,11 +77,10 @@ data Constant i f s where
   KObject     :: [(T.Text, Constant i f s)] -> Constant i f s
   deriving (Eq, Show)
 
-type TypeName = FullIdentifier
 data FieldType
   = TInt32 | TInt64 | TUInt32 | TUInt64 | TSInt32 | TSInt64
   | TFixed32 | TFixed64 | TSFixed32 | TSFixed64
-  | TDouble | TBool | TString | TBytes | TOther TypeName
+  | TDouble | TBool | TString | TBytes | TOther MessageType
   deriving (Eq, Show)
 
 type FieldName = Identifier
@@ -117,6 +116,8 @@ data OneOf i f s where
   deriving (Eq, Show)
 data OneOfField i f s where
   OneOfField :: FieldType -> OneOfName -> i -> [Option i f s] -> OneOfField i f s
+  OOption :: Option i f s                                     -> OneOfField i f s
+  OEmpty ::                                                      OneOfField i f s
   deriving (Eq, Show)
 type MessageName = Identifier
 data Message i f s where
@@ -124,16 +125,37 @@ data Message i f s where
   deriving (Eq, Show)
 type MapName = Identifier
 
+type GroupName = Identifier
+
+data RefType where
+  RefType :: FullIdentifier -> RefType
+  Dot     :: FullIdentifier -> RefType
+  deriving(Show, Eq)
+
+type MessageType = RefType
+type EnumType = RefType
+
+data Extend i f s where
+  Extend :: MessageType -> [MessageField i f s] -> Extend i f s
+  deriving(Show, Eq)
+
+data Group i f s where
+  Group :: Label -> GroupName -> i -> [MessageField i f s] -> Group i f s
+  deriving(Show, Eq)
 data MessageField i f s where
   MField      :: Label -> FieldType -> FieldName -> i -> [Option i f s] -> MessageField i f s
-  MEnum      :: Enum i f s                                             -> MessageField i f s
-  MMessage   :: Message i f s                                          -> MessageField i f s
-  MOption    :: Option i f s                                           -> MessageField i f s
-  MOneOfDef   :: OneOf i f s                                            -> MessageField i f s
-  MapDef     :: FieldType {-sans float-} -> FullIdentifier
-             -> MapName -> i -> [Option i f s]                         -> MessageField i f s
-  MReserved   :: ReservedValue i f s                                    -> MessageField i f s
-  MEmpty ::                                                               MessageField i f s
+  MEnum       :: Enum i f s                                             -> MessageField i f s
+  MMessage    :: Message i f s                                          -> MessageField i f s
+  MExtend     :: Extend i f s                                           -> MessageField i f s {-proto2-}
+  MExtensions :: Extension i                                            -> MessageField i f s {-proto2-}
+  MGroup      :: Group i f s                                            -> MessageField i f s {-proto2-}
+  
+  MOption     :: Option i f s                                           -> MessageField i f s
+  MOneOf      :: OneOf i f s                                            -> MessageField i f s
+  MMapField   :: FieldType {-sans float-} -> FullIdentifier
+              -> MapName -> i -> [Option i f s]                         -> MessageField i f s
+  MReserved   :: Reserved i                                             -> MessageField i f s
+  MEmpty      ::                                                           MessageField i f s
   deriving (Eq, Show) 
 data Label
   = Single
@@ -142,15 +164,44 @@ data Label
   | Required -- proto2
   deriving (Eq, Show)
 
---pattern Stream = Repeated
+data Connectivity = Stream | Unary
+  deriving (Eq, Show)
 
 data MaxOrInt i = Max | I i
   deriving (Eq, Show)
 
-data ReservedValue i f s where
-  RRanges :: [i] -> Maybe (MaxOrInt i) ->  ReservedValue i f s
-  RNames  :: [Identifier] -> ReservedValue i f s
-  deriving (Eq, Show)
+{-
+v3
+reserved = "reserved" ( ranges | fieldNames ) ";"
+fieldNames = fieldName { "," fieldName }
+ranges = range { "," range }
+range =  intLit [ "to" ( intLit | "max" ) ]
+
+
+v2
+reserved = "reserved" ( ranges | fieldNames ) ";"
+fieldNames = fieldName { "," fieldName }
+ranges = range { "," range }
+range =  intLit [ "to" ( intLit | "max" ) ]
+
+extensions = "extensions" ranges ";"
+
+-}
+
+data Reserved i where
+  Ranges :: [Range i] -> Reserved i
+  FieldNames :: [FullIdentifier] -> Reserved i
+  deriving(Show, Eq)
+
+data Extension i where
+  Extension :: [Range i] -> Extension i
+  deriving(Show, Eq)
+
+data Range i where
+  Solo   :: i -> Range i
+  FromTo :: i -> i -> Range i
+  ToMax  :: i -> Range i
+  deriving(Show, Eq)
 
 
 {-
@@ -160,16 +211,32 @@ messageType ")" (( "{" { option | emptyStatement } "}" ) | ";" )
 stream = "stream" streamName "(" messageType "," messageType ")" (( "{"
 { option | emptyStatement } "}") | ";" )
 -}
-data Stream i f s where
-  Stream :: Identifier -> [FullIdentifier] -> [Option i f s] -> Stream i f s
+--data Stream i f s where
+--  Stream :: Identifier -> [FullIdentifier] -> [Option i f s] -> Stream i f s
 type ServiceName = Identifier
+type StreamName = Identifier
 data ServiceField i f s where
   SOption :: Option i f s -> ServiceField i f s
-  SRPC :: Identifier -> Bool  -> FullIdentifier -> Bool -> FullIdentifier
+  SRpc :: Identifier -> Connectivity  -> MessageType -> Connectivity -> MessageType
     -> [Option i f s] -> ServiceField i f s
+  SStream :: Identifier -> MessageType -> MessageType -> [Option i f s] -> ServiceField i f s {-v2-}
   SEmpty :: ServiceField i f s
   deriving (Eq, Show)
 
+{-v2
+service = "service" serviceName "{" { option | rpc | stream | emptyStatement } "}"
+rpc = "rpc" rpcName "(" [ "stream" ] messageType ")" "returns" "(" [ "stream" ]
+messageType ")" (( "{" { option | emptyStatement } "}" ) | ";" )
+
+stream = "stream" streamName "(" messageType "," messageType ")" (( "{"
+{ option | emptyStatement } "}") | ";" )
+-}
+
+{-v3
+service = "service" serviceName "{" { option | rpc | emptyStatement } "}"
+rpc = "rpc" rpcName "(" [ "stream" ] messageType ")" "returns" "(" [ "stream" ]
+messageType ")" (( "{" {option | emptyStatement } "}" ) | ";")
+-}
 data Service i f s where
   Service :: ServiceName -> [ServiceField i f s] -> Service i f s 
   deriving (Eq, Show)

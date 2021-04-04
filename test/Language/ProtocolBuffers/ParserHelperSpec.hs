@@ -29,34 +29,34 @@ spec = do
 
   describe "Parse Float" $ do
     it "inf" $ do
-      parse floatLit "" "inf" `shouldBe` Right Inf
+      parse floatLit "" "inf" `shouldBe` Right (Inf U)
     it "nan" $ do
-      parse floatLit "" "nan" `shouldBe` Right NaN
+      parse floatLit "" "nan" `shouldBe` Right (NaN U)
 
     it "1." $ do
-      parse floatLit "" "1." `shouldBe` Right (Fl1 "1" Nothing Nothing)
+      parse floatLit "" "1." `shouldBe` Right (Fl1 U "1" Nothing Nothing)
     it "1.1" $ do
-      parse floatLit "" "1.1" `shouldBe` Right (Fl1 "1" (Just "1") Nothing)
+      parse floatLit "" "1.1" `shouldBe` Right (Fl1 U "1" (Just "1") Nothing)
     it "1.e1" $ do
-      parse floatLit "" "1.e1" `shouldBe` Right (Fl1 "1" Nothing (Just "1"))
+      parse floatLit "" "1.e1" `shouldBe` Right (Fl1 U "1" Nothing (Just "1"))
     it "1.1e1" $ do
-      parse floatLit "" "1.1e1" `shouldBe` Right (Fl1 "1" (Just "1") (Just "1"))
+      parse floatLit "" "1.1e1" `shouldBe` Right (Fl1 U "1" (Just "1") (Just "1"))
     it "0123456789.1234567890e1234567890" $ do
-      parse floatLit "" "0123456789.1234567890e1234567890" `shouldBe` Right (Fl1 "0123456789" (Just "1234567890") (Just "1234567890"))
+      parse floatLit "" "0123456789.1234567890e1234567890" `shouldBe` Right (Fl1 U "0123456789" (Just "1234567890") (Just "1234567890"))
     it ".1" $ do
-      parse floatLit "" ".1" `shouldBe` Right (Fl3 "1" Nothing)
+      parse floatLit "" ".1" `shouldBe` Right (Fl3 U "1" Nothing)
     it ".1" $ do
-      parse floatLit "" ".1e1" `shouldBe` Right (Fl3 "1" (Just "1"))
+      parse floatLit "" ".1e1" `shouldBe` Right (Fl3 U "1" (Just "1"))
 
 
     it "10e10" $ do
-      parse floatLit "" "10e10" `shouldBe` Right (Fl2 "10" "10")
+      parse floatLit "" "10e10" `shouldBe` Right (Fl2 U "10" "10")
     it "10e-10" $ do
-      parse floatLit "" "10e-10" `shouldBe` Right (Fl2 "10" "-10")
+      parse floatLit "" "10e-10" `shouldBe` Right (Fl2 U "10" "-10")
     it "10e+10" $ do
-      parse floatLit "" "10e+10" `shouldBe` Right (Fl2 "10" "+10")
+      parse floatLit "" "10e+10" `shouldBe` Right (Fl2 U "10" "+10")
     it "012e0" $ do
-      parse floatLit "" "012e+0" `shouldBe` Right (Fl2 "012" "+0")
+      parse floatLit "" "012e+0" `shouldBe` Right (Fl2 U "012" "+0")
 
   describe "charValue" $ do
     it "\\x01" $ do
