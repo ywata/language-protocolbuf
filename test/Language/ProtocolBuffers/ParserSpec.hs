@@ -65,7 +65,7 @@ false
           input = [text|
 -1
 |]
-      P.parse constant "" input `shouldBe` Right (KInt (Dec U "1"))
+      P.parse constant "" input `shouldBe` Right (KInt (Dec N "1"))
     it "octal" $ do
       let input :: T.Text    
           input = [text|
@@ -153,7 +153,13 @@ abc = "b"
 abc = ident.fier
 |]
       P.parse option "" input `shouldBe` Right (Option (Regular ["abc"]) (KIdentifier ["ident", "fier"]))
-
+      
+    it "custom option" $ do
+      let input :: T.Text    
+          input = [text|
+(custom_option) = 1
+|]
+      P.parse option "" input `shouldBe` Right (Option (Custom ["custom_option"] []) (KInt (Dec U "1")))
 
 
 
@@ -207,11 +213,11 @@ optional bool d = 2;
 
 
 
-    it "bool with default" $ do
+    it "bool with options" $ do
       let input :: T.Text    
           input = [text|
-bool d = 1 [integer = 1, text = "string", boolean = true, boolean = false];
+bool d = 1 [integer = 1, text = "string", boolean = true, boolean = false, (custom_option).b = 1];
 |]
-      P.parse messageField "" input `shouldBe` Right (MField Single TBool "d" (Dec U "1") [Option (Regular ["default"]) (KBool True)])
+      P.parse messageField "" input `shouldBe` Right (MField Single TBool "d" (Dec U "1") [Option (Regular ["integer"]) (KInt (Dec U "1")),Option (Regular ["text"]) (KString (StringLit [CHAR 's',CHAR 't',CHAR 'r',CHAR 'i',CHAR 'n',CHAR 'g'])),Option (Regular ["boolean"]) (KBool True),Option (Regular ["boolean"]) (KBool False), (Option (Custom ["custom_option"] ["b"]) (KInt (Dec U "1")))])
 
 
