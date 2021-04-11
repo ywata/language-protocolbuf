@@ -160,6 +160,11 @@ instance Wire BS.ByteString where
   encode = BS.unpack
   decode = BS.pack
 
+instance Wire BL.ByteString where
+  wireType = const LengthDelim
+  encode = BL.unpack
+  decode = BL.pack
+
 -- This implmentation can be very inefficient.
 instance Wire String where
   wireType = const LengthDelim
