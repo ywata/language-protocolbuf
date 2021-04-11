@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-message A{
+message Ax{
   int32 i32 = 0x1;
   int64 i64 = 012;
 }

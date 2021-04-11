@@ -27,7 +27,7 @@ spec = do
       (\(i :: Int32) -> (unzig32 . zig32) i `shouldBe` i)
     it "Int64" $ property $
       (\(i :: Int64) -> (unzig64 . zig64) i `shouldBe` i)
-      
+
   describe "decode . encode = id" $ do
     it "Word32" $ property
       $ (\(i :: Word32) -> decode (encode i) `shouldBe` i)
@@ -51,12 +51,10 @@ spec = do
       $ (\(i :: Float) -> decode (encode i) `shouldBe` i)
     it "Double" $ property
       $ (\(i :: Double) -> decode (encode i) `shouldBe` i)
-      
     it "Bool" $ property
       $ (\(i :: Bool) -> decode (encode i) `shouldBe` i)
 
-      
-  describe "WireField" $ do
+  describe "WireField fieldNumber" $ do
     it "fieldNumber 1" $ do
       let v = 1 :: Int32
           WireField f' wt' v' = getAfterPut_wireField 1 v
@@ -65,16 +63,57 @@ spec = do
       let v = 256 :: Int32
           WireField f' wt' v' = getAfterPut_wireField 256 v
       f' `shouldBe` v
-    it "VarInt" $ do
+  describe "WireField Value" $ do
+    it "Int32" $ do
+      let v = -912 :: Int32
+          WireField f' wt' v' = getAfterPut_wireField 1 v
+      (decode v') `shouldBe` v
+    it "Int64" $ do
+      let v = -983 :: Int64
+          WireField f' wt' v' = getAfterPut_wireField 1 v
+      (decode v') `shouldBe` v
+    it "Fixed Int32" $ do
+      let v = -912 :: Fixed Int32
+          WireField f' wt' v' = getAfterPut_wireField 1 v
+      (decode v') `shouldBe` v
+    it "Fixed Int64" $ do
+      let v = -983 :: Fixed Int64
+          WireField f' wt' v' = getAfterPut_wireField 1 v
+      (decode v') `shouldBe` v
+    it "Signed Int32" $ do
+      let v = -912 :: Signed Int32
+          WireField f' wt' v' = getAfterPut_wireField 1 v
+      (decode v') `shouldBe` v
+    it "Signed Int64" $ do
+      let v = -983 :: Signed Int64
+          WireField f' wt' v' = getAfterPut_wireField 1 v
+      (decode v') `shouldBe` v
+    it "Word32" $ do
+      let v = 9912 :: Word32
+          WireField f' wt' v' = getAfterPut_wireField 1 v
+      (decode v') `shouldBe` v
+    it "Word64" $ do
+      let v = 9983 :: Word64
+          WireField f' wt' v' = getAfterPut_wireField 1 v
+      (decode v') `shouldBe` v
+
+    it "String with ひらがなと漢字" $ do
+      let v = "testひらがなと漢字" :: String
+          WireField f' wt' v' = getAfterPut_wireField 256 v
+      (decode v') `shouldBe` v
+
+  describe "WireField WiredType" $ do
+    it "VarInt Int32" $ do
       let v = 1 :: Int32
           WireField f' wt' v' = getAfterPut_wireField 256 v
       wt' `shouldBe` (wireType v)
       wt' `shouldBe` VarInt
-    it "VarInt" $ do
+    it "VarInt Int64" $ do
       let v = 1 :: Int64
           WireField f' wt' v' = getAfterPut_wireField 256 v
       wt' `shouldBe` (wireType v)
       wt' `shouldBe` VarInt
+
     it "Fixed32 fixed32" $ do
       let v = 0 :: Fixed Int32
           WireField f' wt' v' = getAfterPut_wireField 256 v
@@ -90,9 +129,20 @@ spec = do
           WireField f' wt' v' = getAfterPut_wireField 256 v
       wt' `shouldBe` wireType v
       wt' `shouldBe` Fixed64
-    it "Fixed32 Double" $ do
+    it "Signed Int32" $ do
+      let v = 999 :: Signed Int32
+          WireField f' wt' v' = getAfterPut_wireField 256 v
+      wt' `shouldBe` wireType v
+      wt' `shouldBe` VarInt
+    it "Signed Int64" $ do
+      let v = 9 :: Signed Int64
+          WireField f' wt' v' = getAfterPut_wireField 256 v
+      wt' `shouldBe` wireType v
+      wt' `shouldBe` VarInt
+
+    it "Double" $ do
       let v = 100.9 :: Double
-          WireField f' wt' v' = getAfterPut_wireField 256 (100.9 :: Double)
+          WireField f' wt' v' = getAfterPut_wireField 256 v
       wt' `shouldBe` wireType v
       wt' `shouldBe` Fixed64
     it "String with ひらがなと漢字" $ do
@@ -101,6 +151,12 @@ spec = do
       wt' `shouldBe` wireType v
       wt' `shouldBe` LengthDelim
 
+  describe "0" $ do
+    it "Int32" $ do
+      let v = 0 :: Int32
+          WireField f' wt' v' = getAfterPut_wireField 256 v
+      wt' `shouldBe` wireType v
+      wt' `shouldBe` VarInt
 
 getAfterPut_wireField :: Wire a => FieldNumber -> a -> WireField a
 getAfterPut_wireField f a = runGet getWireField (trace (show $ bs) bs)
@@ -116,7 +172,7 @@ prop_zig_unzig32 i = unzig32 (zig32 i) == i
 
 prop_zig_unzig64 :: Int64 -> Bool
 prop_zig_unzig64 i = unzig64 (zig64 i) == i
-      
+
 prop_Word32 :: Word32 -> Bool
 prop_Word32 i = decode (encode i) == i
 
@@ -157,22 +213,19 @@ prop_Bool :: Bool -> Bool
 prop_Bool b = decode (encode b) == b
 
 instance Arbitrary (Signed Int8) where
-  arbitrary  = Signed <$> arbitrary 
+  arbitrary  = Signed <$> arbitrary
 
 instance Arbitrary (Signed Int32) where
-  arbitrary  = Signed <$> arbitrary 
+  arbitrary  = Signed <$> arbitrary
 
 instance Arbitrary (Signed Int64) where
-  arbitrary  = Signed <$> arbitrary 
+  arbitrary  = Signed <$> arbitrary
 
 instance Arbitrary (Fixed Int16) where
-  arbitrary  = Fixed <$> arbitrary 
+  arbitrary  = Fixed <$> arbitrary
 
 instance Arbitrary (Fixed Int32) where
-  arbitrary  = Fixed <$> arbitrary 
+  arbitrary  = Fixed <$> arbitrary
 
 instance Arbitrary (Fixed Int64) where
-  arbitrary  = Fixed <$> arbitrary 
-
-
-
+  arbitrary  = Fixed <$> arbitrary
