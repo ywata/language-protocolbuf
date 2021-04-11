@@ -47,6 +47,11 @@ spec = do
       $ (\(i :: Signed Int32) -> decode (encode i) `shouldBe` i)
     it "Signed Int64" $ property
       $ (\(i :: Signed Int64) -> decode (encode i) `shouldBe` i)
+    it "Float" $ property
+      $ (\(i :: Float) -> decode (encode i) `shouldBe` i)
+    it "Double" $ property
+      $ (\(i :: Double) -> decode (encode i) `shouldBe` i)
+
 
 --    it "Fixed Int32" $ property
 --      $ (\(i :: Fixed Int64) -> decode (encode i) `shouldBe` i)
@@ -114,13 +119,12 @@ prop_FixedInt32 i = decode (encode i) == i
 
 prop_FixedInt64 :: Fixed Int64 -> Bool
 prop_FixedInt64 i = decode (encode i) == i
-{-
+
 prop_Float :: Float -> Bool
-prop_Float = decode (encode i) == i
+prop_Float i = decode (encode i) == i
 
 prop_Double :: Double -> Bool
 prop_Double i = decode (encode i) == i
--}
 
 instance Arbitrary (Signed Int8) where
   arbitrary  = Signed <$> arbitrary 

@@ -7,7 +7,7 @@ Google briefly explains how wire format is constructed.
 https://developers.google.com/protocol-buffers/docs/encoding
 -}
 
-import Data.Coerce
+import Unsafe.Coerce
 --import Data.Fixed hiding (Fixed(..))
 import Data.Int
 import Data.Word
@@ -117,16 +117,28 @@ instance Wire (Fixed Int64) where
   encode i  = map (shift8 i) [0..7]
   decode xs = fromIntegral $ foldl f 0 (reverse xs) - 2^64
     where f c v = c * 256 + toInteger (v .&. mask8)
-{-
+
+
+-- Converting Float and Double into a Word32(or 64) seems to require unsafeCoerce.
 instance Wire Float where
-  encode i = reverse $ dropWhile (== 0) $ map (shift8 i) (reverse [0..3])
-  decode xs = fromIntegral $ foldl f 0 (reverse xs) - 2^32
-    where f c v = c * 256 + toInteger (v .&. mask8)
+  encode i = encode w32
+    where w32 :: Word32
+          w32 = unsafeCoerce i
+  decode xs = f
+    where w32 :: Word32
+          w32 = decode xs
+          f :: Float
+          f = unsafeCoerce w32
+      
 instance Wire Double where
-  encode i  = reverse $ dropWhile (== 0) $ map (shift8 i) (reverse [0..7])
-  decode xs = fromIntegral $ foldl f 0 (reverse xs) - 2^64
-    where f c v = c * 256 + toInteger (v .&. mask8)
--}
+  encode i = encode w64
+    where w64 :: Word64
+          w64 = unsafeCoerce i
+  decode xs = d
+    where w64 :: Word64
+          w64 = decode xs
+          d :: Double
+          d = unsafeCoerce w64
 
 
 instance Wire BS.ByteString where
