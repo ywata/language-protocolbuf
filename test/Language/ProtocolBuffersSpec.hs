@@ -25,7 +25,7 @@ spec = do
 syntax = 'proto3';
 ;
 |]
-      parseProtocolBuffer input `shouldBe` (Right (ProtocolBuffer []))
+      parseProtocolBuffer input `shouldBe`  Right (ProtocolBuffer [DSyntax "proto3",DEmpty,DEmpty])
   
   
   describe "Full" $ do
@@ -54,7 +54,7 @@ message A{
   reserved "f2", "f3";  
 }
 |]
-      parseProtocolBuffer input `shouldBe` (Right (ProtocolBuffer []))
+      parseProtocolBuffer input `shouldBe` Right (ProtocolBuffer [DSyntax "proto3",DEmpty,DPackage ["org","github","proto"],DEmpty,DImport Normal ["org","github"],DEmpty,DImport Weak ["org","github"],DEmpty,DImport Public ["org","github"],DEmpty,DOption (Option (Regular ["java_package"]) (KString (StringLit [CHAR 'o',CHAR 'r',CHAR 'g',CHAR '.',CHAR 'g',CHAR 'i',CHAR 't',CHAR 'h',CHAR 'u',CHAR 'b']))),DEmpty,DMessage (Message "A" [MField Single (TOther (RefType ["int"])) "int_field1" (Dec U "1") [],MField Repeated (TOther (RefType ["int"])) "int_field2" (Dec U "2") [],MField Required (TOther (RefType ["int"])) "int_field3" (Dec U "3") [],MField Optional (TOther (RefType ["int"])) "int_field4" (Dec U "4") [],MField Single (TOther (RefType ["int"])) "int_field5" (Dec U "5") [Option (Regular ["default"]) (KInt (Dec U "1"))],MField Single (TOther (RefType ["A"])) "msg_filed" (Dec U "6") [],MOneOf (OneOf "foo" [OneOfField TString "name" (Dec U "7") [],OEmpty,OneOfField TString "nickname" (Dec U "8") [],OEmpty]),MReserved (Ranges [Solo (Dec U "10")]),MEmpty,MReserved (FieldNames [["f1"]]),MEmpty,MReserved (FieldNames [["f2"],["f3"]]),MEmpty])])
     it "Full" $ do
       let input :: T.Text    
           input = [text|
@@ -68,7 +68,7 @@ message A{
   reserved "af1", "f2";
 }
 |]
-      parseProtocolBuffer input `shouldBe` Right (ProtocolBuffer  [])
+      parseProtocolBuffer input `shouldBe` Right (ProtocolBuffer [DSyntax "proto3",DEmpty,DMessage (Message "A" [MReserved (Ranges [Solo (Dec U "1")]),MEmpty,MReserved (Ranges [Solo (Dec U "5"),Solo (Dec U "6")]),MEmpty,MReserved (Ranges [FromTo (Dec U "3") (Dec U "4")]),MEmpty,MReserved (Ranges [Solo (Dec U "7"),FromTo (Dec U "8") (Dec U "9")]),MEmpty,MReserved (FieldNames [["af1"],["f2"]]),MEmpty])])
 
 
   describe "Types" $ do
@@ -99,7 +99,7 @@ message Primitive {
   bytes bs = 15;
 }
 |]
-      parseProtocolBuffer input `shouldBe` (Right (ProtocolBuffer []))
+      parseProtocolBuffer input `shouldBe` Right (ProtocolBuffer [DSyntax "proto3",DEmpty,DMessage (Message "Primitive" [MField Single TDouble "d" (Dec U "1") [],MField Single (TOther (RefType ["float"])) "f" (Dec U "2") [],MField Single TInt32 "i32" (Dec U "3") [],MField Single TInt64 "i64" (Dec U "4") [],MField Single TUInt32 "ui32" (Dec U "5") [],MField Single TUInt64 "ui64" (Dec U "6") [],MField Single TSInt32 "si32" (Dec U "7") [],MField Single TSInt64 "si64" (Dec U "8") [],MField Single TFixed32 "f32" (Dec U "9") [],MField Single TFixed64 "f64" (Dec U "10") [],MField Single TSFixed32 "sf32" (Dec U "11") [],MField Single TSFixed64 "sf64" (Dec U "12") [],MField Single TBool "b" (Dec U "13") [],MField Single TString "s" (Dec U "14") [],MField Single TBytes "bs" (Dec U "15") []])])
 
     it "Enum" $ do
       let input :: T.Text    
@@ -115,7 +115,7 @@ message Primitive {
   Three three = 3;
 }
 |]
-      parseProtocolBuffer input `shouldBe` (Right (ProtocolBuffer []))
+      parseProtocolBuffer input `shouldBe` Right (ProtocolBuffer [DSyntax "proto3",DEmpty,DEnum (Enum "One" [EnumField "ZERO1" (Dec U "0") []]),DEnum (Enum "Two" [EnumField "ZERO2" (Dec U "0") [],EnumField "ONE2" (Dec U "1") []]),DEnum (Enum "Three" [EnumField "ZERO3" (Dec U "0") [],EnumField "ONE3" (Dec U "1") [],EnumField "TWO2" (Dec U "2") []])])
     it "EmptyDecl" $ do
       let input :: T.Text    
           input = [text|
@@ -125,7 +125,7 @@ message A{
   ;
 }
 |]
-      parseProtocolBuffer input `shouldBe` (Right (ProtocolBuffer[]))
+      parseProtocolBuffer input `shouldBe`  Right (ProtocolBuffer [DSyntax "proto3",DEmpty,DEmpty,DMessage (Message "A" [MEmpty])])
 
 
 

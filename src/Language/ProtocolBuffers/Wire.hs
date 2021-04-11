@@ -153,7 +153,12 @@ instance Wire String where
 instance Wire T.Text where
   encode = BS.unpack . UBS.fromString . T.unpack
   decode = T.pack . UBS.toString . BS.pack
-  
+
+instance Wire Bool where
+  encode False = encode (0 :: Int32)
+  encode True  = encode (1 :: Int32)
+  decode [] = False
+  decode _  = True -- not sure
 
 
 -- zig zag encoding

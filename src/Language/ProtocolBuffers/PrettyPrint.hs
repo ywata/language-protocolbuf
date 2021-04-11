@@ -14,11 +14,17 @@ import Text.PrettyPrint
 class Pretty a where
   pretty :: a -> Doc
 
+period :: Doc
+period = char '.'
+
 text' :: T.Text -> Doc
 text' = text . T.unpack
 
 punct :: Char -> [T.Text] -> Doc
 punct ch = sep . punctuate (char ch) . map text'
+
+fullIdentifier :: FullIdentifier -> Doc
+fullIdentifier = hcat . punctuate period . map text'
 
 instance Pretty a => Pretty [a] where
   pretty = vcat . map pretty
@@ -52,18 +58,18 @@ instance (Pretty i, Pretty f, Pretty s) => Pretty (Option i f s) where
   pretty (Option name cnst) = text' "option" <+> pretty name <+> equals <+> pretty cnst
 
 instance (Pretty i, Pretty f, Pretty s) => Pretty (Declaration i f s) where
-  pretty (DSyntax t) = text' "syntax" <+> equals <+> doubleQuotes (text' t) <> semi
-  pretty (DImport it t) = text' "import" <+> pretty it <+> doubleQuotes (punct '.' t) <> semi
-  pretty (DPackage fids) = text' "package" <+> (punct '.' fids) <> semi
-  pretty (DOption opt) = pretty opt <> semi
-  pretty (DMessage msg) = pretty msg <> semi
-  pretty (DEnum enm) = pretty enm <> semi  
-  pretty (DService n sfs) = text' "service" <+> text' n <> braces (sep $ map pretty sfs) <> semi
+  pretty (DSyntax t) = text' "syntax" <+> equals <+> doubleQuotes (text' t)
+  pretty (DImport it t) = text' "import" <+> pretty it <+> doubleQuotes (fullIdentifier t)
+  pretty (DPackage fids) = text' "package" <+> (punct '.' fids)
+  pretty (DOption opt) = pretty opt
+  pretty (DMessage msg) = pretty msg
+  pretty (DEnum enm) = pretty enm
+  pretty (DService n sfs) = text' "service" <+> text' n <> braces (sep $ map pretty sfs)
   pretty DEmpty = semi
 
 instance Pretty OptionName where
-  pretty (Regular fs) = (punct '.' fs)
-  pretty (Custom fs fs') = parens (punct '.' fs) <> char '.' <> (punct '.' fs')
+  pretty (Regular fs) = fullIdentifier fs
+  pretty (Custom fs fs') = parens (fullIdentifier fs) <> period <> fullIdentifier fs'
     
 
 instance Pretty ImportType where
@@ -74,7 +80,7 @@ instance Pretty ImportType where
 instance (Pretty i, Pretty f, Pretty s) => Pretty (Constant i f s) where
   pretty (KIdentifier fids) = punct '.' fids
   pretty (KInt i) = pretty i
-  pretty (KString s) = pretty s
+  pretty (KString s) = doubleQuotes (pretty s)
   pretty (KBool True) = text' "true"
   pretty (KBool False) = text' "false"
   pretty (KObject _) = text' "KObject" -- 
@@ -98,7 +104,8 @@ instance (Pretty i, Pretty f, Pretty s) => Pretty (Enum i f s) where
   pretty (Enum id efs) = text' id <> braces(sep $ map pretty efs)
 
 instance (Pretty i, Pretty f, Pretty s) => Pretty (EnumField i f s) where
-  pretty (EnumField fn i opts) = text' fn <+> equals <+> pretty i <+> (brackets . sep . punctuate (char ',') $ map pretty opts) <> semi
+  pretty (EnumField fn i []) = text' fn <+> equals <+> pretty i <> semi
+  pretty (EnumField fn i opts) = text' fn <+> equals <+> pretty i <+> (brackets . sep . punctuate (char ',') $ map pretty opts) <> semi  
 
 instance Pretty FieldType where
   pretty TInt32 = text' "int32"
@@ -118,8 +125,8 @@ instance Pretty FieldType where
   pretty (TOther fids) = pretty fids
 
 instance Pretty RefType where
-  pretty (RefType fids) = text "RefType not implemented"
-  pretty (Dot     fids) = text "RefType not impemented"
+  pretty (RefType fids) = fullIdentifier fids
+  pretty (Dot     fids) = text' "." <> (fullIdentifier fids)
 
 
 instance (Pretty i, Pretty f, Pretty s) => Pretty (Message i f s) where
@@ -138,18 +145,19 @@ instance (Pretty i, Pretty f, Pretty s) => Pretty (OneOfField i f s) where
   pretty OEmpty = semi
   
 instance (Pretty i, Pretty f, Pretty s) => Pretty (MessageField i f s) where
-  pretty (MField l ft fn i opts) = pretty l <+> pretty ft <+> text' fn <+> equals <+> pretty i
-    <+> prOptions opts <> semi
+  pretty (MField l ft fn i []) = pretty l <+> pretty ft <+> text' fn <+> equals <+> pretty i <> semi
+  pretty (MField l ft fn i opts) = pretty l <+> pretty ft <+> text' fn <+> equals <+> pretty i <> prOptions opts <> semi
+
   pretty (MEnum e) = pretty e
   pretty (MMessage m) = pretty m
-  pretty (MOption o) = text' "option" <+> pretty o
+  pretty (MOption o) = text' "option" <+> pretty o  <> semi
   pretty (MOneOf d) = text' "oneof" <+> pretty d
 
   pretty (MMapField ft1 ft2 fn i opts) =
-    text' "map" <+> char '<' <> pretty ft1 <> comma <> punct '.' ft2 <> char '>'
+    text' "map" <+> char '<' <> pretty ft1 <> period <> punct '.' ft2 <> char '>'
       <+> text' fn <+> equals <+> pretty i <+> prOptions opts
-  pretty (MReserved r) = text' "reserved" <+> pretty r
-  pretty (MExtensions e) = text' "extensiosn" <+> pretty e
+  pretty (MReserved r) = text' "reserved" <+> pretty r  <> semi
+  pretty (MExtensions e) = text' "extensiosn" <+> pretty e  <> semi
   pretty MEmpty = semi
     
 instance Pretty Label where

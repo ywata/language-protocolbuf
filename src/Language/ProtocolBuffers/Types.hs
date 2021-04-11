@@ -60,7 +60,7 @@ data Option i f s where
 -- |  Regular : Option defined by google.
 -- |  Custom  : Custom option.
 data OptionName where
-  Regular :: FullIdentifier -> OptionName
+  Regular :: FullIdentifier                   -> OptionName
   Custom  :: FullIdentifier -> FullIdentifier -> OptionName
   deriving (Eq, Show)
 
@@ -69,11 +69,11 @@ data ImportType
   deriving (Eq, Show)
 
 data Constant i f s where
-  KIdentifier :: FullIdentifier       -> Constant i f s
-  KInt        :: i                    -> Constant i f s
-  KFloat      :: f                    -> Constant i f s
-  KString     :: s                    -> Constant i f s
-  KBool       :: Bool                 -> Constant i f s
+  KIdentifier :: FullIdentifier             -> Constant i f s
+  KInt        :: i                          -> Constant i f s
+  KFloat      :: f                          -> Constant i f s
+  KString     :: s                          -> Constant i f s
+  KBool       :: Bool                       -> Constant i f s
   KObject     :: [(T.Text, Constant i f s)] -> Constant i f s
   deriving (Eq, Show)
 
@@ -82,6 +82,22 @@ data FieldType
   | TFixed32 | TFixed64 | TSFixed32 | TSFixed64
   | TDouble | TBool | TString | TBytes | TOther MessageType
   deriving (Eq, Show)
+
+isKeyType :: FieldType -> Bool
+isKeyType TInt32 = True
+isKeyType TInt64 = True
+isKeyType TUInt32 = True
+isKeyType TUInt64 = True
+isKeyType TSInt32 = True
+isKeyType TSInt64 = True
+
+isKeyType TFixed32 = True
+isKeyType TFixed64 = True
+isKeyType TSFixed32 = True
+isKeyType TSFixed64 = True
+isKeyType TBool = True
+isKeyType TString = True
+isKeyType _ = False
 
 type FieldName = Identifier
 type FieldNumber = Int
@@ -114,11 +130,13 @@ type OneOfName = Identifier
 data OneOf i f s where
   OneOf :: OneOfName -> [OneOfField i f s] -> OneOf i f s
   deriving (Eq, Show)
+
 data OneOfField i f s where
   OneOfField :: FieldType -> OneOfName -> i -> [Option i f s] -> OneOfField i f s
   OOption :: Option i f s                                     -> OneOfField i f s
   OEmpty ::                                                      OneOfField i f s
   deriving (Eq, Show)
+
 type MessageName = Identifier
 data Message i f s where
   Message :: MessageName -> [MessageField i f s] -> Message i f s
@@ -142,6 +160,7 @@ data Extend i f s where
 data Group i f s where
   Group :: Label -> GroupName -> i -> [MessageField i f s] -> Group i f s
   deriving(Show, Eq)
+
 data MessageField i f s where
   MField      :: Label -> FieldType -> FieldName -> i -> [Option i f s] -> MessageField i f s
   MEnum       :: Enum i f s                                             -> MessageField i f s
@@ -157,6 +176,7 @@ data MessageField i f s where
   MReserved   :: Reserved i                                             -> MessageField i f s
   MEmpty      ::                                                           MessageField i f s
   deriving (Eq, Show) 
+
 data Label
   = Single
   | Repeated
