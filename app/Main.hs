@@ -5,6 +5,9 @@
 module Main where
 import Control.Monad (join)
 import System.Exit
+import Data.List (find)
+import Data.Int
+import Data.Word
 import Data.Maybe
 import Data.Binary.Get
 import qualified Data.Text as T hiding(map, concatMap)
@@ -47,8 +50,8 @@ runAsDummyPlugin file = do
 scan :: D.Arg "file to be scan" FilePath -> D.Cmd "Scan file and show summary" ()
 scan file = do
   let file' = D.get file
-  wfs <- liftIO $ scanFile file'
-  liftIO $ print wfs
+  bs <- liftIO $ scanFile file'
+  liftIO $ print $ runGet (many getWireField) <$> bs
   return ()
 
 copyStdinToFile :: FilePath -> IO([WireField a])
@@ -58,12 +61,18 @@ copyStdinToFile path = bracket (openFile path WriteMode) hClose
             let !wfs = runGet (many getWireField) bs
             return wfs
 
-scanFile :: FilePath -> IO([WireField a])
+scanFile :: FilePath -> IO(Maybe (BL.ByteString))
 scanFile path = bracket (openFile path ReadMode) hClose
   $ \h -> do
             bs <- BL.hGetContents h
-            let !wfs = runGet (many getWireField) bs
-            return wfs
+            let wfs = runGet (many getWireField) bs
+                !wf = findWireField 15 wfs
+                bs' :: Maybe BL.ByteString
+                bs' = (decode . (\(WireField _ _ d) -> d)) <$> wf
+            return bs'
+
+findWireField :: Int32 -> [WireField a] -> Maybe (WireField a)
+findWireField i wfs = find (\(WireField n _ _) -> n == i) wfs
 
 main :: IO()
 main =   D.run_ $ D.Group "Group of actions"
