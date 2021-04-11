@@ -1,6 +1,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE AllowAmbiguousTypes #-}
 module Language.ProtocolBuffers.Wire where
 {-
 Google briefly explains how wire format is constructed.
@@ -62,42 +63,50 @@ setContFlags (x : xs) = (x .|. contBit) : setContFlags xs
 
 -- | type class for converting data and [Word8].
 class Wire a where
+  wireType :: a -> WireType
   encode :: a -> [Word8]
   decode :: [Word8] -> a
 
 -- Wire format
 -- type 0 : int32, int64, uint32, uint64, sint32, sint64, bool, enum
 instance Wire Int32 where
+  wireType = const VarInt
   encode i  = setContFlags $ reverse $ dropWhile (== 0) $ map (shift7 i) (reverse [0..4])
   decode xs = fromIntegral $ foldl f 0 (reverse xs)
     where f c v = c * 128 + toInteger (v .&. mask7)
 instance Wire Int64 where
+  wireType = const VarInt
   encode i  = setContFlags $ reverse $ dropWhile (== 0) $ map (shift7 i) (reverse [0..9])
   decode xs = fromIntegral $ foldl f 0 (reverse xs)
     where f c v = c * 128 + toInteger (v .&. mask7)
 
 -- Word corresponds to Unsigned.
 instance Wire Word32 where
+  wireType = const VarInt
   encode i  = setContFlags $ reverse $ dropWhile (== 0) $ map (shift7 i) (reverse [0..4])
   decode xs = fromIntegral $ foldl f 0 (reverse xs)
     where f c v = c * 128 + toInteger (v .&. mask7)
+
 instance Wire Word64 where
+  wireType = const VarInt
   encode i  = setContFlags $ reverse $ dropWhile (== 0) $ map (shift7 i) (reverse [0..9])
   decode xs = fromIntegral $ foldl f 0 (reverse xs)
     where f c v = c * 128 + toInteger (v .&. mask7)
 
 -- Signed integers
 instance Wire (Signed Int8) where
-  encode (Signed i)  = setContFlags $ reverse $ dropWhile (== 0) $ map (shift7 (zig8 i)) (reverse [0..1])
-  decode xs = h . fromIntegral $ foldl f 0 (reverse xs)
+  wireType = const VarInt
+  encode i  = setContFlags $ reverse $ dropWhile (== 0) $ map (shift7 i) (reverse [0..4])
+  decode xs = fromIntegral $ foldl f 0 (reverse xs)
     where f c v = c * 128 + toInteger (v .&. mask7)
-          h n = (shiftR n 1 .&. bit 8) .|. (shiftL (n .&. 1) 7)
 
 instance Wire (Signed Int32) where
+  wireType = const VarInt
   encode (Signed i)  = setContFlags $ reverse $ dropWhile (== 0) $ map (shift7 (zig32 i)) (reverse [0..4])
   decode xs = Signed . unzig32 . fromIntegral $ foldl f 0 (reverse xs)
     where f c v = c * 128 + toInteger (v .&. mask7)
 instance Wire (Signed Int64) where
+  wireType = const VarInt
   encode (Signed i)  = setContFlags $ reverse $ dropWhile (== 0) $ map (shift7 (zig64 i)) (reverse [0..9])
   decode xs = Signed . unzig64 . fromIntegral $ foldl f 0 (reverse xs)
     where f c v = c * 128 + toInteger (v .&. mask7)
@@ -106,14 +115,17 @@ instance Wire (Signed Int64) where
 
 -- Fixed Ints.
 instance Wire (Fixed Int16) where
+  wireType = const Fixed32  
   encode i  = map (shift8 i) [0..1]
   decode xs = fromIntegral $ foldl f 0 (reverse xs) - 2^16
     where f c v = c * 256 + toInteger (v .&. mask8)
 instance Wire (Fixed Int32) where
+  wireType = const Fixed32
   encode i  = map (shift8 i) [0..3]
   decode xs = fromIntegral $ foldl f 0 (reverse xs) - 2^32
     where f c v = c * 256 + toInteger (v .&. mask8)
 instance Wire (Fixed Int64) where
+  wireType = const Fixed64
   encode i  = map (shift8 i) [0..7]
   decode xs = fromIntegral $ foldl f 0 (reverse xs) - 2^64
     where f c v = c * 256 + toInteger (v .&. mask8)
@@ -121,6 +133,7 @@ instance Wire (Fixed Int64) where
 
 -- Converting Float and Double into a Word32(or 64) seems to require unsafeCoerce.
 instance Wire Float where
+  wireType = const Fixed32
   encode i = encode w32
     where w32 :: Word32
           w32 = unsafeCoerce i
@@ -131,6 +144,7 @@ instance Wire Float where
           f = unsafeCoerce w32
       
 instance Wire Double where
+  wireType = const Fixed64
   encode i = encode w64
     where w64 :: Word64
           w64 = unsafeCoerce i
@@ -142,19 +156,23 @@ instance Wire Double where
 
 
 instance Wire BS.ByteString where
+  wireType = const LengthDelim
   encode = BS.unpack
   decode = BS.pack
 
 -- This implmentation can be very inefficient.
 instance Wire String where
+  wireType = const LengthDelim
   encode = BS.unpack . UBS.fromString
   decode = UBS.toString . BS.pack
 -- This implmentation can be very inefficient too.
 instance Wire T.Text where
+  wireType = const  LengthDelim
   encode = BS.unpack . UBS.fromString . T.unpack
   decode = T.pack . UBS.toString . BS.pack
 
 instance Wire Bool where
+  wireType = const LengthDelim
   encode False = encode (0 :: Int32)
   encode True  = encode (1 :: Int32)
   decode [] = False
@@ -270,9 +288,10 @@ getWireField' wfs = do
         _ -> fail "illegal format"
 
 
-putWireField ::Wire a =>  FieldNumber -> WireType -> a -> Put
-putWireField i wt v = do
+putWireField ::Wire a =>  FieldNumber -> a -> Put
+putWireField i v = do
   let hdr = combineWireHeader i wt
+      wt = wireType v
   putByteString $ BS.pack hdr
   case wt of
     VarInt  -> putByteString $ BS.pack $ encode v
