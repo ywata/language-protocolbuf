@@ -1,0 +1,21 @@
+syntax = "proto2";
+
+message A {
+  required int32 a1 = 1;
+  required int64 a2 = 2;
+  optional group Nest1 = 3{
+    required int32 n1 = 1;
+    optional group Nest2 = 2{
+      required int32 n2 = 1;
+    }
+  }
+  enum E{
+    E1 = 1;
+    E2 = 2;
+  }
+}
+
+enum B {
+  B1 = 1;
+  B2 = 2;
+}
