@@ -1,8 +1,11 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 module Language.ProtocolBuffers.Wire where
 {-
 Google briefly explains how wire format is constructed.
@@ -68,6 +71,7 @@ class Wire a where
   wireType :: a -> WireType
   encode :: a -> [Word8]
   decode :: [Word8] -> a
+
 
 -- Wire format
 -- type 0 : int32, int64, uint32, uint64, sint32, sint64, bool, enum
@@ -191,56 +195,33 @@ type family Ret a where
   Ret Int32 = Word32
   Ret Int64 = Word64
 
-class ZigZag a where
+class (Bits a, Integral a, Bits(Ret a), Integral (Ret a)) => ZigZag a where
   bits :: a -> Int
   zig :: a -> Ret a
-  unzig :: Ret a -> a
-
-instance ZigZag Int8 where
-  bits = const 8
   zig n = l `xor` r
     where
-      l, r :: Ret Int8
+      l, r :: Ret a
       l = fromIntegral (shiftL n 1) -- 1 bit left shift = (* 2)
       r = fromIntegral (shiftR n (bits n -1)) -- arithmetic 7 bit right shift = fill byte with MSB (sign)
 
-  unzig :: Word8 -> Int8
+  unzig :: Ret a -> a
   unzig n = l `xor` msk
     where
-        msk :: Int8
+        msk :: a
         msk = if n .&. 1 == 1 then -1 else 0 -- 0xFF if original data is negative otherwise 0x00
-        l :: Int8
+        l :: a
         l = fromIntegral (shiftR n 1) -- inverse of l in zig8.
 
+instance ZigZag Int8 where
+  bits = const 8
 -- zig zag encoding
 -- zig8 is implemented to understand the conversion or haskell libraries.
+
 instance ZigZag Int32 where
   bits = const 32
-  zig n = l `xor` r
-    where
-        l, r :: Word32
-        l = fromIntegral (shiftL n 1)
-        r = fromIntegral (shiftR n (fromIntegral (bits n -1)))
-  unzig n = l `xor` msk
-    where
-        msk :: Int32
-        msk = if n .&. 1 == 1 then -1 else 0
-        l :: Int32
-        l = fromIntegral (shiftR n 1)
 
 instance ZigZag Int64 where
   bits = const 64
-  zig n = l `xor` r
-    where
-        l, r :: Word64
-        l = fromIntegral (shiftL n 1)
-        r = fromIntegral (shiftR n (fromIntegral (bits n -1)))
-  unzig n = l `xor` msk
-    where
-        msk :: Int64
-        msk = if n .&. 1 == 1 then -1 else 0
-        l :: Int64
-        l = fromIntegral (shiftR n 1)
 
 data WireType = VarInt | Fixed64 | LengthDelim | StartGroup | EndGroup | Fixed32
   deriving (Show, Read, Eq, Bounded, Enum)
