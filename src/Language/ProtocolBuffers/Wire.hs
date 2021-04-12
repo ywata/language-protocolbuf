@@ -104,13 +104,13 @@ instance Wire (Signed Int8) where
 
 instance Wire (Signed Int32) where
   wireType = const VarInt
-  encode (Signed i)  = setContFlags $ reverse $ dropWhile (== 0) $ map (shift7 (zig32 i)) (reverse [0..4])
-  decode xs = Signed . unzig32 . fromIntegral $ foldl f 0 (reverse xs)
+  encode (Signed i)  = setContFlags $ reverse $ dropWhile (== 0) $ map (shift7 (zig i)) (reverse [0..4])
+  decode xs = Signed . unzig . fromIntegral $ foldl f 0 (reverse xs)
     where f c v = c * 128 + toInteger (v .&. mask 7)
 instance Wire (Signed Int64) where
   wireType = const VarInt
-  encode (Signed i)  = setContFlags $ reverse $ dropWhile (== 0) $ map (shift7 (zig64 i)) (reverse [0..9])
-  decode xs = Signed . unzig64 . fromIntegral $ foldl f 0 (reverse xs)
+  encode (Signed i)  = setContFlags $ reverse $ dropWhile (== 0) $ map (shift7 (zig i)) (reverse [0..9])
+  decode xs = Signed . unzig . fromIntegral $ foldl f 0 (reverse xs)
     where f c v = c * 128 + toInteger (v .&. mask 7)
 
 
@@ -212,19 +212,6 @@ instance ZigZag Int8 where
         l :: Int8
         l = fromIntegral (shiftR n 1) -- inverse of l in zig8.
 
-zig8 :: Int8 -> Word8
-zig8 = zig
-unzig8 :: Word8 -> Int8
-unzig8 = unzig
-
-zig32 :: Int32 -> Word32
-zig32 = zig
-unzig32 :: Word32 -> Int32
-unzig32 = unzig
-zig64 :: Int64 -> Word64
-zig64 = zig
-unzig64 :: Word64 -> Int64
-unzig64 = unzig
 -- zig zag encoding
 -- zig8 is implemented to understand the conversion or haskell libraries.
 instance ZigZag Int32 where

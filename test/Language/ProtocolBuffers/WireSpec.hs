@@ -22,11 +22,11 @@ spec :: Spec
 spec = do
   describe "unzig . zig = id" $ do
     it "Int8" $ property $
-      (\(i :: Int8) -> (unzig8 . zig8) i `shouldBe` i)
+      (\(i :: Int8) -> (unzig . zig) i `shouldBe` i)
     it "Int32" $ property $
-      (\(i :: Int32) -> (unzig32 . zig32) i `shouldBe` i)
+      (\(i :: Int32) -> (unzig . zig) i `shouldBe` i)
     it "Int64" $ property $
-      (\(i :: Int64) -> (unzig64 . zig64) i `shouldBe` i)
+      (\(i :: Int64) -> (unzig . zig) i `shouldBe` i)
 
   describe "decode . encode = id" $ do
     it "Word32" $ property
@@ -165,13 +165,13 @@ getAfterPut_wireField f a = runGet getWireField (trace (show $ bs) bs)
 
 
 prop_zig_unzig8 :: Int8 -> Bool
-prop_zig_unzig8 i = unzig8 (zig8 i) == i
+prop_zig_unzig8 i = unzig (zig i) == i
 
 prop_zig_unzig32 :: Int32 -> Bool
-prop_zig_unzig32 i = unzig32 (zig32 i) == i
+prop_zig_unzig32 i = unzig (zig i) == i
 
 prop_zig_unzig64 :: Int64 -> Bool
-prop_zig_unzig64 i = unzig64 (zig64 i) == i
+prop_zig_unzig64 i = unzig (zig i) == i
 
 prop_Word32 :: Word32 -> Bool
 prop_Word32 i = decode (encode i) == i
