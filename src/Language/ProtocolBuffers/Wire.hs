@@ -2,8 +2,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE GADTs #-}
-{-# LANGUAGE AllowAmbiguousTypes #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE TypeFamilies #-}
 module Language.ProtocolBuffers.Wire where
 {-
 Google briefly explains how wire format is constructed.
@@ -118,7 +117,7 @@ instance Wire (Signed Int64) where
 
 -- Fixed Ints.
 instance Wire (Fixed Int16) where
-  wireType = const Fixed32  
+  wireType = const Fixed32
   encode i  = map (shift8 i) [0..1]
   decode xs = fromIntegral $ foldl f 0 (reverse xs) - 2^16
     where f c v = c * 256 + toInteger (v .&. mask 8)
@@ -145,7 +144,7 @@ instance Wire Float where
           w32 = decode xs
           f :: Float
           f = unsafeCoerce w32
-      
+
 instance Wire Double where
   wireType = const Fixed64
   encode i = encode w64
@@ -187,18 +186,24 @@ instance Wire Bool where
   decode _  = True -- not sure
 
 
-class ZigZag a b where
-  bits :: a -> b -> Int
-  zig :: a -> b
-  unzig :: b -> a
+type family Ret a where
+  Ret Int8  = Word8
+  Ret Int32 = Word32
+  Ret Int64 = Word64
 
-instance ZigZag Int8 Word8 where
-  bits = \_ _ ->  8
+class ZigZag a where
+  bits :: a -> Int
+  zig :: a -> Ret a
+  unzig :: Ret a -> a
+
+instance ZigZag Int8 where
+  bits = const 8
   zig n = l `xor` r
-    where 
-        l, r :: Word8
-        l = fromIntegral (shiftL n 1) -- 1 bit left shift = (* 2)
-        r = fromIntegral (shiftR n (8 -1)) -- arithmetic 7 bit right shift = fill byte with MSB (sign)
+    where
+      l, r :: Ret Int8
+      l = fromIntegral (shiftL n 1) -- 1 bit left shift = (* 2)
+      r = fromIntegral (shiftR n (8 -1)) -- arithmetic 7 bit right shift = fill byte with MSB (sign)
+
   unzig :: Word8 -> Int8
   unzig n = l `xor` msk
     where
@@ -222,15 +227,13 @@ unzig64 :: Word64 -> Int64
 unzig64 = unzig
 -- zig zag encoding
 -- zig8 is implemented to understand the conversion or haskell libraries.
-instance ZigZag Int32 Word32 where
-  bits = \_ _ -> 32
-  zig :: Int32 -> Word32
+instance ZigZag Int32 where
+  bits = const 32
   zig n = l `xor` r
-    where 
+    where
         l, r :: Word32
         l = fromIntegral (shiftL n 1)
-        r = fromIntegral (shiftR n (fromIntegral (bits n l -1)))
-  unzig :: Word32 -> Int32
+        r = fromIntegral (shiftR n (fromIntegral (bits n -1)))
   unzig n = l `xor` msk
     where
         msk :: Int32
@@ -238,16 +241,13 @@ instance ZigZag Int32 Word32 where
         l :: Int32
         l = fromIntegral (shiftR n 1)
 
-instance ZigZag Int64 Word64 where
-  bits = \_ _ -> 64
-  zig :: Int64 -> Word64
+instance ZigZag Int64 where
+  bits = const 64
   zig n = l `xor` r
-    where 
+    where
         l, r :: Word64
         l = fromIntegral (shiftL n 1)
-        r = fromIntegral (shiftR n (fromIntegral (bits n l -1)))
-
-  unzig :: Word64 -> Int64
+        r = fromIntegral (shiftR n (fromIntegral (bits n -1)))
   unzig n = l `xor` msk
     where
         msk :: Int64
@@ -297,7 +297,7 @@ getWireField' wfs = do
           return $ WireField len w vs
         (Just len, Just w@StartGroup)  -> getWireField' []
 --        (Just len, Just w@EndGroup)    -> error "should not happen" -- getWireField' [] -- this is error
-        _ -> fail "illegal format"        
+        _ -> fail "illegal format"
     _ -> case (l, wt) of
         (Just len, Just w@VarInt)      -> do
           v <- getVarInt
@@ -333,7 +333,7 @@ putWireField i v = do
       putByteString (BS.pack $ encode len)
       putByteString (BS.pack $ encode v)
 --  StartGroup ->
---  EndGroup -> 
+--  EndGroup ->
 --  _ -> fail "Unknown WireType value"
 
 
