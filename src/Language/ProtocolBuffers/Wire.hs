@@ -202,7 +202,7 @@ instance ZigZag Int8 where
     where
       l, r :: Ret Int8
       l = fromIntegral (shiftL n 1) -- 1 bit left shift = (* 2)
-      r = fromIntegral (shiftR n (8 -1)) -- arithmetic 7 bit right shift = fill byte with MSB (sign)
+      r = fromIntegral (shiftR n (bits n -1)) -- arithmetic 7 bit right shift = fill byte with MSB (sign)
 
   unzig :: Word8 -> Int8
   unzig n = l `xor` msk
