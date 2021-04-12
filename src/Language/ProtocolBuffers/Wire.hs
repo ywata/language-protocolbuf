@@ -43,19 +43,20 @@ type FieldNumber = Int32
 -- integers, enum or bool, next byte is also a part of the var int.
 contBit :: Word8
 contBit = 0x80
-mask7 :: Word8
-mask7 = complement contBit
 
-mask8 :: Word8
-mask8 = complement 0
+mask :: (Bits a, Integral a) => Int -> a
+mask n = foldr (.|.) 0 (map bit [0..n-1])
 
+----
+shiftk :: (Integral a, Bits a) => Int -> a -> Int -> Word8
+shiftk k a n = fromIntegral ((shift a (-k * n)) .&. mask k)
 
 -- shift7 is for var ints.
 shift7 :: (Integral a, Bits a) => a -> Int -> Word8
-shift7 a n = fromIntegral ((shift a (-7 * n)) .&. 0x7F)
+shift7 = shiftk 7
 -- shift8 is for fixed length data.
 shift8 :: (Integral a, Bits a) => a -> Int -> Word8
-shift8 a n = fromIntegral ((shift a (-8 * n)) .&. 0xFF)
+shift8 = shiftk 8
 
 -- mark contBit set if a byte has continuation data.
 setContFlags :: [Word8] -> [Word8]
@@ -75,43 +76,43 @@ instance Wire Int32 where
   wireType = const VarInt
   encode i  = setContFlags $ reverse $ dropWhile (== 0) $ map (shift7 i) (reverse [0..4])
   decode xs = fromIntegral $ foldl f 0 (reverse xs)
-    where f c v = c * 128 + toInteger (v .&. mask7)
+    where f c v = c * 128 + toInteger (v .&. mask 7)
 instance Wire Int64 where
   wireType = const VarInt
   encode i  = setContFlags $ reverse $ dropWhile (== 0) $ map (shift7 i) (reverse [0..9])
   decode xs = fromIntegral $ foldl f 0 (reverse xs)
-    where f c v = c * 128 + toInteger (v .&. mask7)
+    where f c v = c * 128 + toInteger (v .&. mask 7)
 
 -- Word corresponds to Unsigned.
 instance Wire Word32 where
   wireType = const VarInt
   encode i  = setContFlags $ reverse $ dropWhile (== 0) $ map (shift7 i) (reverse [0..4])
   decode xs = fromIntegral $ foldl f 0 (reverse xs)
-    where f c v = c * 128 + toInteger (v .&. mask7)
+    where f c v = c * 128 + toInteger (v .&. mask 7)
 
 instance Wire Word64 where
   wireType = const VarInt
   encode i  = setContFlags $ reverse $ dropWhile (== 0) $ map (shift7 i) (reverse [0..9])
   decode xs = fromIntegral $ foldl f 0 (reverse xs)
-    where f c v = c * 128 + toInteger (v .&. mask7)
+    where f c v = c * 128 + toInteger (v .&. mask 7)
 
 -- Signed integers
 instance Wire (Signed Int8) where
   wireType = const VarInt
   encode i  = setContFlags $ reverse $ dropWhile (== 0) $ map (shift7 i) (reverse [0..4])
   decode xs = fromIntegral $ foldl f 0 (reverse xs)
-    where f c v = c * 128 + toInteger (v .&. mask7)
+    where f c v = c * 128 + toInteger (v .&. mask 7)
 
 instance Wire (Signed Int32) where
   wireType = const VarInt
   encode (Signed i)  = setContFlags $ reverse $ dropWhile (== 0) $ map (shift7 (zig32 i)) (reverse [0..4])
   decode xs = Signed . unzig32 . fromIntegral $ foldl f 0 (reverse xs)
-    where f c v = c * 128 + toInteger (v .&. mask7)
+    where f c v = c * 128 + toInteger (v .&. mask 7)
 instance Wire (Signed Int64) where
   wireType = const VarInt
   encode (Signed i)  = setContFlags $ reverse $ dropWhile (== 0) $ map (shift7 (zig64 i)) (reverse [0..9])
   decode xs = Signed . unzig64 . fromIntegral $ foldl f 0 (reverse xs)
-    where f c v = c * 128 + toInteger (v .&. mask7)
+    where f c v = c * 128 + toInteger (v .&. mask 7)
 
 
 
@@ -120,17 +121,17 @@ instance Wire (Fixed Int16) where
   wireType = const Fixed32  
   encode i  = map (shift8 i) [0..1]
   decode xs = fromIntegral $ foldl f 0 (reverse xs) - 2^16
-    where f c v = c * 256 + toInteger (v .&. mask8)
+    where f c v = c * 256 + toInteger (v .&. mask 8)
 instance Wire (Fixed Int32) where
   wireType = const Fixed32
   encode i  = map (shift8 i) [0..3]
   decode xs = fromIntegral $ foldl f 0 (reverse xs) - 2^32
-    where f c v = c * 256 + toInteger (v .&. mask8)
+    where f c v = c * 256 + toInteger (v .&. mask 8)
 instance Wire (Fixed Int64) where
   wireType = const Fixed64
   encode i  = map (shift8 i) [0..7]
   decode xs = fromIntegral $ foldl f 0 (reverse xs) - 2^64
-    where f c v = c * 256 + toInteger (v .&. mask8)
+    where f c v = c * 256 + toInteger (v .&. mask 8)
 
 
 -- Converting Float and Double into a Word32(or 64) seems to require unsafeCoerce.
@@ -336,8 +337,6 @@ putWireField i v = do
 --  _ -> fail "Unknown WireType value"
 
 
-mask :: (Bits a, Integral a) => Int -> a
-mask n = foldr (.|.) 0 (map bit [0..n-1])
 wtShift :: Int
 wtShift = 3
 
